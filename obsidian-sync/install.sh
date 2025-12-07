@@ -18,7 +18,9 @@ echo "Created log directory: $LOG_DIR"
 
 # Install Python dependencies for the script
 echo "Installing Python dependencies..."
-pip3 install --user requests 2>/dev/null || pip3 install requests
+pip3 install --user --break-system-packages requests 2>/dev/null || \
+    pip3 install --break-system-packages requests 2>/dev/null || \
+    echo "Warning: Could not install requests. Make sure it's available."
 
 # Copy plist to LaunchAgents
 if [ -f "$PLIST_DEST" ]; then
