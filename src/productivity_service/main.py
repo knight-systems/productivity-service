@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
 
 from .config import settings
-from .routes import alexa, health, tasks
+from .routes import alexa, health, obsidian, tasks
 
 # Configure logging
 logging.basicConfig(
@@ -49,6 +49,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(tasks.router, prefix="/tasks")
 app.include_router(alexa.router)
+app.include_router(obsidian.router)
 
 # Lambda handler via Mangum
 handler = Mangum(app, lifespan="off")
