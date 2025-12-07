@@ -18,6 +18,7 @@ class TaskParseResponse(BaseModel):
     """Response with extracted task components."""
 
     title: str = Field(..., description="Extracted task title")
+    note: str | None = Field(None, description="Cleaned up version of original input for task note")
     project: str | None = Field(None, description="Detected project name")
     context: str | None = Field(None, description="Detected context (@home, @work, etc.)")
     due_date: str | None = Field(None, description="Due date in YYYY-MM-DD format")

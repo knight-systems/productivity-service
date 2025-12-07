@@ -40,6 +40,7 @@ Voice input: "{text}"
 
 Extract these fields:
 - title: The core task action (clean, imperative form without temporal/project references)
+- note: The original input cleaned up with proper capitalization and punctuation (complete sentence)
 - project: Project name if mentioned (null if none detected)
 - context: Context like @home, @work, @errands, @phone (null if none). Include the @ prefix.
 - due_date: Due date in YYYY-MM-DD format (null if none). Convert relative dates:
@@ -53,6 +54,7 @@ Extract these fields:
 Return only valid JSON matching this schema:
 {{
   "title": "string",
+  "note": "string",
   "project": "string or null",
   "context": "string or null",
   "due_date": "YYYY-MM-DD or null",
@@ -85,6 +87,7 @@ Return only valid JSON matching this schema:
 
         return TaskParseResponse(
             title=parsed.get("title", text),
+            note=parsed.get("note"),
             project=parsed.get("project"),
             context=parsed.get("context"),
             due_date=parsed.get("due_date"),
@@ -99,6 +102,7 @@ Return only valid JSON matching this schema:
         # Return basic extraction on error
         return TaskParseResponse(
             title=text,
+            note=text,  # Use raw input as note on error
             project=None,
             context=None,
             due_date=None,
@@ -111,6 +115,7 @@ Return only valid JSON matching this schema:
         logger.error(f"Failed to parse AI response: {e}")
         return TaskParseResponse(
             title=text,
+            note=text,  # Use raw input as note on error
             project=None,
             context=None,
             due_date=None,

@@ -60,12 +60,12 @@ async def capture_task(request: TaskParseRequest) -> TaskCreateResponse:
     """
     parsed = await parse_task_tags(request.text)
 
+    # Note: Mail Drop only supports title (subject) and note (body).
+    # Project, context, due_date, defer_date are parsed but not used by Mail Drop.
+    # Tasks arrive in inbox and must be organized manually.
     create_request = TaskCreateRequest(
         title=parsed.title,
-        project=parsed.project,
-        context=parsed.context.lstrip("@") if parsed.context else None,
-        due_date=parsed.due_date,
-        defer_date=parsed.defer_date,
+        note=parsed.note,
     )
 
     return await create_omnifocus_task(create_request)

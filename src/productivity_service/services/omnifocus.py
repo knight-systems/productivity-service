@@ -15,37 +15,11 @@ def _build_mail_drop_subject(task: TaskCreateRequest) -> str:
     """
     Build OmniFocus Mail Drop subject line.
 
-    Mail Drop format:
-    - Task title
-    - ::Project (double colon prefix)
-    - @Context (at sign prefix)
-    - #Tag (hash prefix for additional tags)
-    - --YYYY-MM-DD (double dash for due date)
-    - //YYYY-MM-DD (double slash for defer date)
-    - ! (exclamation for flagged)
-
-    Example: "Buy milk ::Grocery @errands --2024-01-15"
+    Note: Mail Drop only supports subject (becomes task title) and body (becomes note).
+    It does NOT support inline syntax for projects, contexts, tags, or dates.
+    Those must be organized manually in OmniFocus after the task arrives in the inbox.
     """
-    parts = [task.title]
-
-    if task.project:
-        parts.append(f"::{task.project}")
-
-    if task.context:
-        # Ensure context has @ prefix
-        context = task.context if task.context.startswith("@") else f"@{task.context}"
-        parts.append(context)
-
-    if task.due_date:
-        parts.append(f"--{task.due_date}")
-
-    if task.defer_date:
-        parts.append(f"//{task.defer_date}")
-
-    if task.flagged:
-        parts.append("!")
-
-    return " ".join(parts)
+    return task.title
 
 
 async def create_omnifocus_task(task: TaskCreateRequest) -> TaskCreateResponse:

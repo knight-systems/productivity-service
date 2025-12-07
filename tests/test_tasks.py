@@ -12,6 +12,7 @@ def test_parse_task_returns_200(client: TestClient) -> None:
     """Test that parse endpoint returns 200."""
     mock_response = TaskParseResponse(
         title="Buy milk",
+        note="Buy milk tomorrow for groceries.",
         project="Groceries",
         context="@errands",
         due_date="2024-01-15",
@@ -78,6 +79,7 @@ def test_capture_task_parses_and_creates(client: TestClient) -> None:
     """Test that capture endpoint combines parse and create."""
     mock_parse = TaskParseResponse(
         title="Call mom",
+        note="Call mom.",
         project=None,
         context="@phone",
         due_date=None,
@@ -91,7 +93,7 @@ def test_capture_task_parses_and_creates(client: TestClient) -> None:
         success=True,
         message="Task created: Call mom",
         task_title="Call mom",
-        mail_drop_subject="Call mom @phone",
+        mail_drop_subject="Call mom",  # Mail Drop only uses title now
     )
 
     with patch(
