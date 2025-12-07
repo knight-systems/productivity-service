@@ -15,6 +15,7 @@ from ..models.routines import (
     MorningBriefRequest,
     MorningBriefResponse,
 )
+from ..models.task import TaskCreateRequest
 from ..services.omnifocus import create_omnifocus_task
 from .obsidian import _get_obsidian_service
 
@@ -244,11 +245,15 @@ async def evening_summary(request: EveningSummaryRequest) -> EveningSummaryRespo
             # Send to OmniFocus
             for task in extracted_tasks:
                 try:
-                    await create_omnifocus_task(
+                    task_request = TaskCreateRequest(
                         title=task.title,
                         note=f"Extracted from daily note ({task.context})",
                     )
-                    tasks_sent += 1
+                    result = await create_omnifocus_task(task_request)
+                    if result.success:
+                        tasks_sent += 1
+                    else:
+                        logger.warning(f"Failed to create task '{task.title}': {result.message}")
                 except Exception as e:
                     logger.error(f"Failed to create task '{task.title}': {e}")
 
