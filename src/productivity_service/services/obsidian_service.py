@@ -12,6 +12,9 @@ logger = logging.getLogger(__name__)
 # Daily note path pattern: 20 - Journal/21 - Daily/{year}/{date} {day}.md
 DAILY_NOTE_PATH_TEMPLATE = "20 - Journal/21 - Daily/{year}/{date} {day}.md"
 
+# Template path for new daily notes
+DAILY_NOTE_TEMPLATE_PATH = "90 - Templates/daily-notes-template.md"
+
 # Heading mapping (display name -> markdown heading)
 # Note: Uses curly apostrophe (') to match Obsidian template
 HEADING_MAP = {
@@ -64,6 +67,138 @@ class ObsidianService:
     def _get_current_time_str(self) -> str:
         """Get current time as HH:MM string."""
         return datetime.now(self.tz).strftime("%H:%M")
+
+    def _render_template(self, template: str, date: datetime) -> str:
+        """Render a daily note template with date variables.
+
+        Supports common Obsidian Templater variables:
+        - {{date}} or {{date:YYYY-MM-DD}} -> 2025-12-08
+        - {{date:dddd}} -> Monday
+        - {{date:MMMM D, YYYY}} -> December 8, 2025
+        """
+        # Map of Templater format tokens to Python strftime
+        format_map = {
+            "YYYY": "%Y",
+            "YY": "%y",
+            "MMMM": "%B",
+            "MMM": "%b",
+            "MM": "%m",
+            "M": "%-m",
+            "DD": "%d",
+            "D": "%-d",
+            "dddd": "%A",
+            "ddd": "%a",
+            "dd": "%a",
+        }
+
+        def replace_date_var(match: re.Match) -> str:
+            fmt = match.group(1) if match.group(1) else "YYYY-MM-DD"
+            # Convert Templater format to strftime
+            py_fmt = fmt
+            for templater_token, strftime_token in format_map.items():
+                py_fmt = py_fmt.replace(templater_token, strftime_token)
+            try:
+                return date.strftime(py_fmt)
+            except ValueError:
+                # If format fails, return original
+                return match.group(0)
+
+        # Replace {{date}} and {{date:FORMAT}} patterns
+        result = re.sub(r"\{\{date(?::([^}]+))?\}\}", replace_date_var, template)
+
+        # Also handle frontmatter date field (just YYYY-MM-DD)
+        result = re.sub(r"^(date:\s*){{date}}",
+                        lambda m: m.group(1) + date.strftime("%Y-%m-%d"),
+                        result, flags=re.MULTILINE)
+
+        return result
+
+    def create_daily_note_from_template(self, date: datetime | None = None) -> dict:
+        """Create a new daily note from the template.
+
+        Args:
+            date: Date for the note (default: today)
+
+        Returns:
+            Dict with path, commit_sha, created status
+        """
+        if date is None:
+            date = datetime.now(self.tz)
+        elif date.tzinfo is None:
+            date = date.replace(tzinfo=self.tz)
+
+        note_path = self._get_daily_note_path(date)
+
+        # Check if note already exists
+        existing = self.github.get_file_content(note_path)
+        if existing is not None:
+            return {
+                "success": True,
+                "path": note_path,
+                "created": False,
+                "message": "Daily note already exists",
+            }
+
+        # Get template
+        template_result = self.github.get_file_content(DAILY_NOTE_TEMPLATE_PATH)
+        if template_result is None:
+            raise FileNotFoundError(f"Template not found: {DAILY_NOTE_TEMPLATE_PATH}")
+
+        template_content, _ = template_result
+
+        # Render template with date
+        rendered_content = self._render_template(template_content, date)
+
+        # Create the file
+        commit_sha = self.github.update_file(
+            path=note_path,
+            content=rendered_content,
+            message=f"Create daily note for {date.strftime('%Y-%m-%d')}",
+            sha=None,  # None = create new file
+        )
+
+        logger.info(f"Created daily note: {note_path}")
+
+        return {
+            "success": True,
+            "path": note_path,
+            "commit_sha": commit_sha,
+            "created": True,
+        }
+
+    def _ensure_daily_note_exists(self, date: datetime | None = None) -> tuple[str, str]:
+        """Ensure daily note exists, creating from template if needed.
+
+        Args:
+            date: Date for the note (default: today)
+
+        Returns:
+            Tuple of (content, sha)
+        """
+        if date is None:
+            date = datetime.now(self.tz)
+        elif date.tzinfo is None:
+            date = date.replace(tzinfo=self.tz)
+
+        note_path = self._get_daily_note_path(date)
+        existing = self.github.get_file_content(note_path)
+
+        if existing is not None:
+            return existing
+
+        # Create from template
+        logger.info(f"Daily note not found, creating from template: {note_path}")
+        result = self.create_daily_note_from_template(date)
+
+        if not result.get("success"):
+            raise RuntimeError(f"Failed to create daily note: {result}")
+
+        # Fetch the newly created note
+        existing = self.github.get_file_content(note_path)
+        if existing is None:
+            raise RuntimeError(f"Failed to read newly created daily note: {note_path}")
+
+        return existing
 
     def _find_heading_position(self, content: str, heading: str) -> int | None:
         """Find the position right after a heading in the content.
@@ -169,14 +304,8 @@ class ObsidianService:
         else:
             formatted_content = f"- {content}\n"
 
-        # Get current file content
-        existing = self.github.get_file_content(note_path)
-
-        if existing is None:
-            # Daily note doesn't exist - this is unexpected, let the user know
-            raise FileNotFoundError(f"Daily note not found: {note_path}. Please create the daily note first.")
-
-        current_content, sha = existing
+        # Get current file content (auto-create if needed)
+        current_content, sha = self._ensure_daily_note_exists(date)
 
         # Insert content after heading
         new_content = self._insert_after_heading(
@@ -277,13 +406,8 @@ class ObsidianService:
         # Get daily note path
         note_path = self._get_daily_note_path(date)
 
-        # Get current file content
-        existing = self.github.get_file_content(note_path)
-
-        if existing is None:
-            raise FileNotFoundError(f"Daily note not found: {note_path}. Please create the daily note first.")
-
-        current_content, sha = existing
+        # Get current file content (auto-create if needed)
+        current_content, sha = self._ensure_daily_note_exists(date)
 
         # Find section bounds
         bounds = self._find_section_bounds(current_content, markdown_heading)
