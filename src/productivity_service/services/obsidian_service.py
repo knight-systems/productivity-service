@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 DAILY_NOTE_PATH_TEMPLATE = "20 - Journal/21 - Daily/{year}/{date} {day}.md"
 
 # Heading mapping (display name -> markdown heading)
+# Note: Uses curly apostrophe (') to match Obsidian template
 HEADING_MAP = {
     "Brain Dump": "## ☕ Brain Dump",
     "Bookmarks": "## 🔖 Bookmarks",

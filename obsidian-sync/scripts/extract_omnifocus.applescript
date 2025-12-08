@@ -11,26 +11,42 @@ on run
 
     tell application "OmniFocus"
         tell default document
-            -- Get flagged tasks that are not completed and available (not deferred)
+            -- Get flagged tasks that are:
+            -- - not completed
+            -- - flagged
+            -- - not dropped
+            -- - in an active project (or no project)
+            -- - not deferred to the future
             set flaggedTasks to every flattened task whose (completed is false) and (flagged is true) and (effectively dropped is false)
 
             repeat with aTask in flaggedTasks
-                -- Skip if deferred to future
+                -- Skip if in a non-active project (on hold, dropped, or completed)
+                set includeTask to true
                 try
-                    set deferDate to defer date of aTask
-                    if deferDate is not missing value then
-                        if deferDate > (current date) then
-                            -- Skip deferred tasks
-                        else
-                            my processTask(aTask, priorityAList, priorityBList, priorityCList, noPriorityList)
+                    set taskProject to containing project of aTask
+                    if taskProject is not missing value then
+                        set projectStatus to status of taskProject
+                        if projectStatus is not active then
+                            set includeTask to false
                         end if
-                    else
-                        my processTask(aTask, priorityAList, priorityBList, priorityCList, noPriorityList)
                     end if
-                on error
-                    -- If we can't check defer date, include the task
-                    my processTask(aTask, priorityAList, priorityBList, priorityCList, noPriorityList)
                 end try
+
+                -- Skip if deferred to future
+                if includeTask then
+                    try
+                        set deferDate to defer date of aTask
+                        if deferDate is not missing value then
+                            if deferDate > (current date) then
+                                set includeTask to false
+                            end if
+                        end if
+                    end try
+                end if
+
+                if includeTask then
+                    my processTask(aTask, priorityAList, priorityBList, priorityCList, noPriorityList)
+                end if
             end repeat
 
             -- Get inbox items
