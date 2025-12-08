@@ -1,0 +1,67 @@
+{
+  "$schema": "file:///opt/homebrew/share/macrowhisper/macrowhisper-schema.json",
+  "defaults": {
+    "actionDelay": 0.3,
+    "activeAction": "autoPaste",
+    "autoUpdateConfig": true,
+    "clipboardBuffer": 5,
+    "clipboardStacking": false,
+    "history": null,
+    "icon": "",
+    "moveTo": "",
+    "noEsc": false,
+    "noNoti": false,
+    "noUpdates": false,
+    "pressReturn": false,
+    "restoreClipboard": true,
+    "returnDelay": 0.1,
+    "scheduledActionTimeout": 5,
+    "simKeypress": false,
+    "watch": "{{HOME}}/Documents/superwhisper"
+  },
+  "inserts": {
+    "autoPaste": {
+      "action": ".autoPaste",
+      "actionDelay": null,
+      "icon": "",
+      "moveTo": "",
+      "noEsc": null,
+      "pressReturn": null,
+      "restoreClipboard": null,
+      "simKeypress": null,
+      "triggerApps": "",
+      "triggerLogic": "or",
+      "triggerModes": "",
+      "triggerVoice": ""
+    }
+  },
+  "scriptsAS": {},
+  "scriptsShell": {
+    "captureTask": {
+      "action": "{{HOME}}/.config/macrowhisper/scripts/capture-task-wrapper.sh \"{{swResult}}\"",
+      "actionDelay": null,
+      "icon": "",
+      "moveTo": null,
+      "noEsc": null,
+      "restoreClipboard": null,
+      "triggerApps": "",
+      "triggerLogic": "or",
+      "triggerModes": "Task",
+      "triggerVoice": ""
+    },
+    "journal": {
+      "action": "{{HOME}}/.config/macrowhisper/scripts/journal-wrapper.sh \"{{swResult}}\"",
+      "actionDelay": null,
+      "icon": "",
+      "moveTo": null,
+      "noEsc": null,
+      "restoreClipboard": null,
+      "triggerApps": "",
+      "triggerLogic": "or",
+      "triggerModes": "Journal",
+      "triggerVoice": ""
+    }
+  },
+  "shortcuts": {},
+  "urls": {}
+}
