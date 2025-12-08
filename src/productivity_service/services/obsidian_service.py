@@ -213,3 +213,100 @@ class ObsidianService:
         note_path = self._get_daily_note_path(date)
         result = self.github.get_file_content(note_path)
         return result[0] if result else None
+
+    def _find_section_bounds(self, content: str, heading: str) -> tuple[int, int] | None:
+        """Find the start and end positions of a section.
+
+        Args:
+            content: Full file content
+            heading: Heading to find (e.g., "## ☕ Brain Dump")
+
+        Returns:
+            Tuple of (start_after_heading, end_before_next_heading) or None if not found
+        """
+        # Find the heading
+        escaped_heading = re.escape(heading)
+        pattern = rf"^{escaped_heading}\s*$"
+
+        match = re.search(pattern, content, re.MULTILINE)
+        if not match:
+            return None
+
+        # Start position is right after heading line
+        start_pos = match.end()
+        if start_pos < len(content) and content[start_pos] == "\n":
+            start_pos += 1
+
+        # Find the next heading (## at start of line)
+        next_heading_match = re.search(r"^##\s", content[start_pos:], re.MULTILINE)
+        if next_heading_match:
+            end_pos = start_pos + next_heading_match.start()
+        else:
+            end_pos = len(content)
+
+        return (start_pos, end_pos)
+
+    def replace_daily_note_section(
+        self,
+        heading: str,
+        content: str,
+        date: datetime | None = None,
+    ) -> dict:
+        """Replace the content of a section in the daily note.
+
+        This is IDEMPOTENT - calling multiple times with the same content
+        will produce the same result.
+
+        Args:
+            heading: Section heading name (e.g., "Brain Dump", "Tasks")
+            content: New content for the section
+            date: Date for the note (default: today)
+
+        Returns:
+            Dict with path, commit_sha, and success status
+        """
+        # Resolve heading to markdown format
+        markdown_heading = HEADING_MAP.get(heading)
+        if not markdown_heading:
+            if heading.startswith("##"):
+                markdown_heading = heading
+            else:
+                raise ValueError(f"Unknown heading: {heading}. Valid options: {list(HEADING_MAP.keys())}")
+
+        # Get daily note path
+        note_path = self._get_daily_note_path(date)
+
+        # Get current file content
+        existing = self.github.get_file_content(note_path)
+
+        if existing is None:
+            raise FileNotFoundError(f"Daily note not found: {note_path}. Please create the daily note first.")
+
+        current_content, sha = existing
+
+        # Find section bounds
+        bounds = self._find_section_bounds(current_content, markdown_heading)
+
+        if bounds is None:
+            # Section doesn't exist - append at end
+            new_content = current_content.rstrip() + f"\n\n{markdown_heading}\n{content}\n"
+        else:
+            start_pos, end_pos = bounds
+            # Replace section content
+            new_content = current_content[:start_pos] + content + "\n\n" + current_content[end_pos:].lstrip()
+
+        # Commit the change
+        commit_message = f"Update {heading} section"
+        commit_sha = self.github.update_file(
+            path=note_path,
+            content=new_content,
+            message=commit_message,
+            sha=sha,
+        )
+
+        return {
+            "success": True,
+            "path": note_path,
+            "commit_sha": commit_sha,
+            "heading": heading,
+        }

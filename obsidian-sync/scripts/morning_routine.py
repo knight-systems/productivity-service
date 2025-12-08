@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Morning routine script - extracts OmniFocus tasks and calls API for morning brief."""
+"""Morning routine script - extracts OmniFocus tasks and calls API for morning brief.
+
+This script is IDEMPOTENT - it can be safely run multiple times on the same day.
+Each run will REPLACE (not append) the Tasks section in the daily note.
+"""
 
 import json
 import logging
@@ -34,9 +38,13 @@ SCRIPT_DIR = Path(__file__).parent
 OMNIFOCUS_SCRIPT = SCRIPT_DIR / "extract_omnifocus.applescript"
 
 
-def extract_omnifocus_tasks() -> list[dict]:
-    """Extract tasks from OmniFocus using AppleScript."""
-    logger.info("Extracting tasks from OmniFocus...")
+def extract_omnifocus_data() -> dict:
+    """Extract tasks and inbox info from OmniFocus using AppleScript.
+
+    Returns:
+        Dict with keys: tasks (list), inbox_count (int), inbox_titles (list)
+    """
+    logger.info("Extracting data from OmniFocus...")
 
     try:
         result = subprocess.run(
@@ -48,36 +56,54 @@ def extract_omnifocus_tasks() -> list[dict]:
 
         if result.returncode != 0:
             logger.error(f"AppleScript error: {result.stderr}")
-            return []
+            return {"tasks": [], "inbox_count": 0, "inbox_titles": []}
 
-        tasks = json.loads(result.stdout.strip())
-        logger.info(f"Extracted {len(tasks)} tasks from OmniFocus")
-        return tasks
+        data = json.loads(result.stdout.strip())
+
+        tasks = data.get("tasks", [])
+        inbox_count = data.get("inbox_count", 0)
+        inbox_titles = data.get("inbox_titles", [])
+
+        logger.info(f"Extracted {len(tasks)} flagged tasks, {inbox_count} inbox items")
+        return {
+            "tasks": tasks,
+            "inbox_count": inbox_count,
+            "inbox_titles": inbox_titles,
+        }
 
     except subprocess.TimeoutExpired:
         logger.error("OmniFocus extraction timed out")
-        return []
+        return {"tasks": [], "inbox_count": 0, "inbox_titles": []}
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse OmniFocus output: {e}")
-        return []
+        return {"tasks": [], "inbox_count": 0, "inbox_titles": []}
     except Exception as e:
-        logger.error(f"Error extracting OmniFocus tasks: {e}")
-        return []
+        logger.error(f"Error extracting OmniFocus data: {e}")
+        return {"tasks": [], "inbox_count": 0, "inbox_titles": []}
 
 
-def call_morning_brief_api(tasks: list[dict]) -> dict | None:
-    """Call the morning brief API endpoint."""
+def call_morning_brief_api(data: dict) -> dict | None:
+    """Call the morning brief API endpoint.
+
+    Args:
+        data: Dict with tasks, inbox_count, inbox_titles
+
+    Returns:
+        API response dict or None on failure
+    """
     logger.info("Calling morning brief API...")
 
     url = f"{API_BASE_URL}/routines/morning-brief"
     payload = {
-        "tasks": tasks,
+        "tasks": data["tasks"],
+        "inbox_count": data["inbox_count"],
+        "inbox_titles": data["inbox_titles"],
         "include_calendar": False,  # TODO: Add calendar integration
         "generate_summary": True,
     }
 
     try:
-        response = requests.post(url, json=payload, timeout=30)
+        response = requests.post(url, json=payload, timeout=60)
         response.raise_for_status()
 
         result = response.json()
@@ -86,28 +112,34 @@ def call_morning_brief_api(tasks: list[dict]) -> dict | None:
 
     except requests.exceptions.RequestException as e:
         logger.error(f"API request failed: {e}")
+        if hasattr(e, "response") and e.response is not None:
+            logger.error(f"Response body: {e.response.text}")
         return None
 
 
 def main():
-    """Main entry point for morning routine."""
+    """Main entry point for morning routine.
+
+    This is IDEMPOTENT - safe to run multiple times.
+    """
     logger.info("=" * 50)
-    logger.info("Starting morning routine")
+    logger.info("Starting morning routine (idempotent)")
     logger.info("=" * 50)
 
-    # Step 1: Extract OmniFocus tasks
-    tasks = extract_omnifocus_tasks()
+    # Step 1: Extract OmniFocus data
+    data = extract_omnifocus_data()
 
-    if not tasks:
-        logger.warning("No tasks extracted from OmniFocus")
+    if not data["tasks"] and data["inbox_count"] == 0:
+        logger.warning("No tasks or inbox items found in OmniFocus")
         # Continue anyway - API will still generate a brief
 
-    # Step 2: Call morning brief API
-    result = call_morning_brief_api(tasks)
+    # Step 2: Call morning brief API (replaces Tasks section)
+    result = call_morning_brief_api(data)
 
     if result and result.get("success"):
         logger.info("Morning routine completed successfully")
         logger.info(f"Daily note updated: {result.get('path', 'unknown')}")
+        logger.info(f"Summary: {result.get('message', '')}")
         return 0
     else:
         logger.error("Morning routine failed")

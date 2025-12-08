@@ -1,105 +1,132 @@
 #!/usr/bin/osascript
--- Extract today's tasks from OmniFocus
--- Returns JSON array of flagged tasks and tasks due today
+-- Extract flagged tasks and inbox summary from OmniFocus
+-- Returns JSON with tasks sorted by priority and inbox summary
 
 on run
-    set taskList to {}
+    set priorityAList to {}
+    set priorityBList to {}
+    set priorityCList to {}
+    set noPriorityList to {}
+    set inboxTitles to {}
 
     tell application "OmniFocus"
         tell default document
-            -- Get flagged tasks that are not completed
-            set flaggedTasks to every flattened task whose (completed is false) and (flagged is true)
+            -- Get flagged tasks that are not completed and available (not deferred)
+            set flaggedTasks to every flattened task whose (completed is false) and (flagged is true) and (effectively dropped is false)
 
             repeat with aTask in flaggedTasks
-                set taskTitle to name of aTask
-                set taskProject to ""
-                set taskTagList to ""
-
-                -- Get project name
+                -- Skip if deferred to future
                 try
-                    set taskProject to name of containing project of aTask
+                    set deferDate to defer date of aTask
+                    if deferDate is not missing value then
+                        if deferDate > (current date) then
+                            -- Skip deferred tasks
+                        else
+                            my processTask(aTask, priorityAList, priorityBList, priorityCList, noPriorityList)
+                        end if
+                    else
+                        my processTask(aTask, priorityAList, priorityBList, priorityCList, noPriorityList)
+                    end if
                 on error
-                    set taskProject to ""
+                    -- If we can't check defer date, include the task
+                    my processTask(aTask, priorityAList, priorityBList, priorityCList, noPriorityList)
                 end try
-
-                -- Get tags as comma-separated string
-                try
-                    set taskTagObjects to tags of aTask
-                    set tagNames to {}
-                    repeat with aTag in taskTagObjects
-                        set end of tagNames to name of aTag
-                    end repeat
-                    set AppleScript's text item delimiters to ","
-                    set taskTagList to tagNames as string
-                    set AppleScript's text item delimiters to ""
-                end try
-
-                -- Build JSON object
-                set jsonObj to "{" & ¬
-                    "\"title\":" & my toJSON(taskTitle) & "," & ¬
-                    "\"project\":" & my toJSON(taskProject) & "," & ¬
-                    "\"flagged\":true," & ¬
-                    "\"tags\":" & my toJSON(taskTagList) & ¬
-                    "}"
-
-                set end of taskList to jsonObj
             end repeat
 
-            -- Also get tasks from "Today" perspective or due soon
-            -- Using the inbox and available tasks
-            set todayTasks to every flattened task whose (completed is false) and (flagged is false) and (next defer date is missing value or next defer date <= (current date))
-
-            -- Limit to first 20 to avoid timeout
-            set taskCount to 0
-            repeat with aTask in todayTasks
-                if taskCount >= 20 then exit repeat
-
-                set taskTitle to name of aTask
-                set taskProject to ""
-                set taskTagList to ""
-
-                -- Get project name
-                try
-                    set taskProject to name of containing project of aTask
-                on error
-                    set taskProject to ""
-                end try
-
-                -- Get tags
-                try
-                    set taskTagObjects to tags of aTask
-                    set tagNames to {}
-                    repeat with aTag in taskTagObjects
-                        set end of tagNames to name of aTag
-                    end repeat
-                    set AppleScript's text item delimiters to ","
-                    set taskTagList to tagNames as string
-                    set AppleScript's text item delimiters to ""
-                end try
-
-                -- Only include if has a project (skip inbox items without context)
-                if taskProject is not "" then
-                    set jsonObj to "{" & ¬
-                        "\"title\":" & my toJSON(taskTitle) & "," & ¬
-                        "\"project\":" & my toJSON(taskProject) & "," & ¬
-                        "\"flagged\":false," & ¬
-                        "\"tags\":" & my toJSON(taskTagList) & ¬
-                        "}"
-
-                    set end of taskList to jsonObj
-                    set taskCount to taskCount + 1
-                end if
+            -- Get inbox items
+            set inboxTasks to every inbox task whose completed is false
+            repeat with aTask in inboxTasks
+                set end of inboxTitles to name of aTask
             end repeat
         end tell
     end tell
 
-    -- Join into JSON array
+    -- Combine in priority order: A, B, C, then no priority
+    set taskList to priorityAList & priorityBList & priorityCList & noPriorityList
+
+    -- Build final JSON
     set AppleScript's text item delimiters to ","
-    set jsonArray to "[" & (taskList as string) & "]"
+    set tasksJson to "[" & (taskList as string) & "]"
+
+    -- Build inbox titles array
+    set inboxJson to "["
+    set inboxCount to count of inboxTitles
+    repeat with i from 1 to inboxCount
+        set inboxJson to inboxJson & my toJSON(item i of inboxTitles)
+        if i < inboxCount then set inboxJson to inboxJson & ","
+    end repeat
+    set inboxJson to inboxJson & "]"
+
     set AppleScript's text item delimiters to ""
 
-    return jsonArray
+    -- Return combined JSON object
+    return "{\"tasks\":" & tasksJson & ",\"inbox_count\":" & inboxCount & ",\"inbox_titles\":" & inboxJson & "}"
 end run
+
+on processTask(aTask, priorityAList, priorityBList, priorityCList, noPriorityList)
+    tell application "OmniFocus"
+        set taskTitle to name of aTask
+        set taskProject to ""
+        set taskTagList to {}
+        set priorityTag to ""
+        set sizeTag to ""
+
+        -- Get project name
+        try
+            set taskProject to name of containing project of aTask
+        on error
+            set taskProject to ""
+        end try
+
+        -- Get tags and identify priority/size
+        try
+            set taskTagObjects to tags of aTask
+            repeat with aTag in taskTagObjects
+                set tagName to name of aTag
+                set end of taskTagList to tagName
+
+                -- Check for priority tags
+                if tagName is "Priority A" then
+                    set priorityTag to "A"
+                else if tagName is "Priority B" then
+                    set priorityTag to "B"
+                else if tagName is "Priority C" then
+                    set priorityTag to "C"
+                end if
+
+                -- Check for size tags
+                if tagName is in {"XS", "S", "M", "L", "XL", "XXL"} then
+                    set sizeTag to tagName
+                end if
+            end repeat
+        end try
+
+        -- Build tags string
+        set AppleScript's text item delimiters to ","
+        set tagString to taskTagList as string
+        set AppleScript's text item delimiters to ""
+
+        -- Build JSON object
+        set jsonObj to "{" & ¬
+            "\"title\":" & my toJSON(taskTitle) & "," & ¬
+            "\"project\":" & my toJSON(taskProject) & "," & ¬
+            "\"priority\":" & my toJSON(priorityTag) & "," & ¬
+            "\"size\":" & my toJSON(sizeTag) & "," & ¬
+            "\"tags\":" & my toJSON(tagString) & ¬
+            "}"
+
+        -- Add to appropriate priority list
+        if priorityTag is "A" then
+            set end of priorityAList to jsonObj
+        else if priorityTag is "B" then
+            set end of priorityBList to jsonObj
+        else if priorityTag is "C" then
+            set end of priorityCList to jsonObj
+        else
+            set end of noPriorityList to jsonObj
+        end if
+    end tell
+end processTask
 
 on toJSON(str)
     if str is "" or str is missing value then

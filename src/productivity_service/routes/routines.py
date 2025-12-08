@@ -43,48 +43,74 @@ def _call_bedrock(prompt: str, max_tokens: int = 1000) -> str:
 
 
 def _format_tasks_for_daily_note(tasks: list[dict]) -> str:
-    """Format OmniFocus tasks as markdown list for daily note."""
+    """Format OmniFocus tasks as markdown list for daily note, grouped by priority."""
     if not tasks:
-        return "- No tasks for today\n"
+        return "- No flagged tasks for today\n"
 
     lines = []
-    # Group by project
-    by_project: dict[str, list[dict]] = {}
-    for task in tasks:
-        project = task.get("project", "Inbox") or "Inbox"
-        if project not in by_project:
-            by_project[project] = []
-        by_project[project].append(task)
 
-    for project, project_tasks in sorted(by_project.items()):
-        lines.append(f"**{project}**")
-        for task in project_tasks:
-            flag = " 🚩" if task.get("flagged") else ""
-            lines.append(f"- [ ] {task['title']}{flag}")
-        lines.append("")  # Blank line between projects
+    # Group by priority (tasks come pre-sorted by priority from AppleScript)
+    by_priority: dict[str, list[dict]] = {"A": [], "B": [], "C": [], "": []}
+    for task in tasks:
+        priority = task.get("priority", "")
+        if priority not in by_priority:
+            priority = ""
+        by_priority[priority].append(task)
+
+    priority_labels = {
+        "A": "🔴 Priority A",
+        "B": "🟡 Priority B",
+        "C": "🟢 Priority C",
+        "": "⚪ No Priority",
+    }
+
+    for priority in ["A", "B", "C", ""]:
+        priority_tasks = by_priority[priority]
+        if not priority_tasks:
+            continue
+
+        lines.append(f"**{priority_labels[priority]}**")
+        for task in priority_tasks:
+            size = f" `{task.get('size')}`" if task.get("size") else ""
+            project = f" [{task.get('project')}]" if task.get("project") else ""
+            lines.append(f"- [ ] {task['title']}{size}{project}")
+        lines.append("")  # Blank line between priorities
 
     return "\n".join(lines)
 
 
-def _generate_morning_summary(tasks: list[dict]) -> str:
+def _generate_morning_summary(tasks: list[dict], inbox_count: int = 0, inbox_titles: list[str] | None = None) -> str:
     """Generate AI morning summary."""
-    if not tasks:
-        return "Good morning! No tasks scheduled for today. Use this time for deep work or planning."
+    if not tasks and inbox_count == 0:
+        return "Good morning! No flagged tasks today. Use this time for deep work or planning."
 
-    # Build task summary for AI
-    task_text = "\n".join([
-        f"- {t['title']} ({t.get('project', 'No project')}){' [FLAGGED]' if t.get('flagged') else ''}"
-        for t in tasks[:20]  # Limit for token efficiency
-    ])
+    # Build task summary for AI, organized by priority
+    task_lines = []
+    for t in tasks[:20]:
+        priority = f"[Priority {t.get('priority')}]" if t.get("priority") else ""
+        size = f"({t.get('size')})" if t.get("size") else ""
+        task_lines.append(f"- {t['title']} {priority} {size} - {t.get('project', 'No project')}".strip())
 
-    prompt = f"""You are a helpful productivity assistant. Generate a brief, encouraging morning summary (2-3 sentences) based on today's tasks.
+    task_text = "\n".join(task_lines)
 
-Today's tasks:
-{task_text}
+    # Inbox section
+    inbox_section = ""
+    if inbox_count > 0:
+        inbox_section = f"\n\nInbox ({inbox_count} items needing processing):"
+        if inbox_titles:
+            inbox_section += "\n" + "\n".join([f"- {t}" for t in inbox_titles[:5]])
+            if inbox_count > 5:
+                inbox_section += f"\n- ... and {inbox_count - 5} more"
+
+    prompt = f"""You are a helpful productivity assistant. Generate a brief, encouraging morning summary (2-3 sentences) based on today's flagged tasks.
+
+Today's flagged tasks (sorted by priority A → B → C):
+{task_text}{inbox_section}
 
 Focus on:
 1. What's the main theme or priority for today?
 2. One encouraging observation or tip
+3. If inbox has items, briefly mention they need processing
 
 Keep it concise and actionable. Don't list the tasks - provide insight."""
 
@@ -92,17 +118,35 @@ Keep it concise and actionable. Don't list the tasks - provide insight."""
         return _call_bedrock(prompt, max_tokens=200)
     except Exception as e:
         logger.error(f"Failed to generate morning summary: {e}")
-        return f"You have {len(tasks)} tasks today. Focus on the flagged items first!"
+        return f"You have {len(tasks)} flagged tasks today. Start with Priority A!"
+
+
+def _format_inbox_summary(inbox_count: int, inbox_titles: list[str]) -> str:
+    """Format inbox summary for daily note."""
+    if inbox_count == 0:
+        return "✅ Inbox is clear!"
+
+    lines = [f"⚠️ **Inbox: {inbox_count} items need processing**"]
+    if inbox_titles:
+        # Summarize themes rather than listing all
+        lines.append("Themes: " + ", ".join(inbox_titles[:3]))
+        if inbox_count > 3:
+            lines.append(f"*...and {inbox_count - 3} more*")
+    return "\n".join(lines)
 
 
 @router.post("/morning-brief", response_model=MorningBriefResponse)
 async def morning_brief(request: MorningBriefRequest) -> MorningBriefResponse:
     """Generate morning brief and inject tasks into daily note.
 
+    This endpoint is IDEMPOTENT - it replaces the Tasks section content,
+    so it can be safely re-run multiple times on the same day.
+
     This endpoint:
-    1. Formats OmniFocus tasks as a markdown checklist
+    1. Formats OmniFocus tasks as a markdown checklist (grouped by priority)
     2. Generates an AI summary of the day ahead
-    3. Appends both to the daily note's Tasks section
+    3. Shows inbox count and themes
+    4. REPLACES the Tasks section content (idempotent)
     """
     try:
         obsidian = _get_obsidian_service()
@@ -112,11 +156,16 @@ async def morning_brief(request: MorningBriefRequest) -> MorningBriefResponse:
             [t.model_dump() for t in request.tasks]
         )
 
+        # Format inbox summary
+        inbox_summary = _format_inbox_summary(request.inbox_count, request.inbox_titles)
+
         # Generate AI summary if requested
         summary = ""
         if request.generate_summary:
             summary = _generate_morning_summary(
-                [t.model_dump() for t in request.tasks]
+                [t.model_dump() for t in request.tasks],
+                request.inbox_count,
+                request.inbox_titles,
             )
 
         # Build content to inject
@@ -124,15 +173,16 @@ async def morning_brief(request: MorningBriefRequest) -> MorningBriefResponse:
         if summary:
             content_parts.append(f"**AI Summary**: {summary}")
             content_parts.append("")
+        content_parts.append(inbox_summary)
+        content_parts.append("")
         content_parts.append(tasks_markdown)
 
         full_content = "\n".join(content_parts)
 
-        # Append to Tasks section
-        result = obsidian.append_to_daily_note(
+        # REPLACE Tasks section (idempotent - safe to re-run)
+        result = obsidian.replace_daily_note_section(
             heading="Tasks",
             content=full_content,
-            timestamp=False,  # No timestamp for task injection
         )
 
         return MorningBriefResponse(
@@ -141,7 +191,7 @@ async def morning_brief(request: MorningBriefRequest) -> MorningBriefResponse:
             commit_sha=result["commit_sha"],
             task_count=len(request.tasks),
             summary=summary,
-            message="Morning brief generated successfully",
+            message=f"Morning brief generated ({len(request.tasks)} tasks, {request.inbox_count} inbox items)",
         )
 
     except Exception as e:

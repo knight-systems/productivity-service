@@ -10,9 +10,9 @@ class OmniFocusTask(BaseModel):
 
     title: str = Field(..., description="Task title")
     project: str = Field(default="", description="Project name")
-    flagged: bool = Field(default=False, description="Whether task is flagged")
+    priority: str = Field(default="", description="Priority tag (A, B, C)")
+    size: str = Field(default="", description="Size tag (XS, S, M, L, XL)")
     tags: str = Field(default="", description="Comma-separated tags")
-    due: str | None = Field(default=None, description="Due date (YYYY-MM-DD)")
 
 
 class MorningBriefRequest(BaseModel):
@@ -20,7 +20,15 @@ class MorningBriefRequest(BaseModel):
 
     tasks: list[OmniFocusTask] = Field(
         default_factory=list,
-        description="Tasks from OmniFocus",
+        description="Tasks from OmniFocus (sorted by priority)",
+    )
+    inbox_count: int = Field(
+        default=0,
+        description="Number of items in OmniFocus inbox",
+    )
+    inbox_titles: list[str] = Field(
+        default_factory=list,
+        description="Titles of inbox items (for theme summary)",
     )
     include_calendar: bool = Field(
         default=False,
