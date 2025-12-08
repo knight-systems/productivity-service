@@ -17,7 +17,7 @@ DAILY_NOTE_PATH_TEMPLATE = "20 - Journal/21 - Daily/{year}/{date} {day}.md"
 HEADING_MAP = {
     "Brain Dump": "## ☕ Brain Dump",
     "Bookmarks": "## 🔖 Bookmarks",
-    "Tasks": "## 📋 Today's Tasks (from OmniFocus)",
+    "Tasks": "## 📋 Today’s Tasks (from OmniFocus)",
     "Morning Plan": "## 🌅 Morning Plan",
     "Journal": "## 📝 Journal & Reflection",
     "Carry-Over": "## 🔁 Carry-Over Tasks",
