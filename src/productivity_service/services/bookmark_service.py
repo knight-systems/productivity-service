@@ -67,32 +67,38 @@ class BookmarkService:
             # Determine title (user override > og:title > title)
             title = request.title or metadata.best_title or _extract_title_from_url(url)
 
-            # Step 2: Determine if we need enrichment
-            needs_enrichment = (
-                request.mode == BookmarkMode.RICH
-                or (request.mode == BookmarkMode.AUTO and not is_quality_metadata(metadata))
-            )
+            # Step 2: Determine enrichment level
+            # - quick: No AI, just meta tags
+            # - auto: Always get AI tags, use meta summary if good quality
+            # - rich: Full AI processing (fetch full content for summary + tags)
+            skip_ai = request.mode == BookmarkMode.QUICK
 
             summary: str | None = None
             auto_tags: list[str] = []
             category: str | None = None
 
-            if needs_enrichment:
+            if skip_ai:
+                # Quick mode: just use meta description
+                summary = metadata.best_description
+            else:
+                # Auto and Rich modes: always get AI tags
                 logger.info(f"Fetching full content for AI enrichment: {url}")
                 try:
                     content = await fetch_full_content(url)
                     enrichment = self._get_ai_enrichment(content.text_content, title)
-                    summary = enrichment.summary
                     auto_tags = enrichment.tags
                     category = enrichment.category
+
+                    # For summary: use AI summary for rich mode, or if meta is low quality
+                    if request.mode == BookmarkMode.RICH or not is_quality_metadata(metadata):
+                        summary = enrichment.summary
+                    else:
+                        # Auto mode with good meta: use meta description as summary
+                        summary = metadata.best_description or enrichment.summary
                 except Exception as e:
                     logger.warning(f"Failed to enrich bookmark: {e}")
                     # Continue without enrichment
                     summary = metadata.best_description
-
-            else:
-                # Use meta description as summary for quick mode
-                summary = metadata.best_description
 
             # Combine user tags with auto-generated tags
             all_tags = list(request.tags) + auto_tags
