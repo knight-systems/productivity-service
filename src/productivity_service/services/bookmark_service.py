@@ -116,7 +116,7 @@ class BookmarkService:
                 timestamp=True,
             )
 
-            # Step 4: Create permanent bookmark file
+            # Step 4: Create or update permanent bookmark file
             bookmark_id = _generate_bookmark_id(title, date_str)
             bookmark_path = f"{BOOKMARKS_FOLDER}/{bookmark_id}.md"
             bookmark_content = _build_bookmark_file(
@@ -130,12 +130,16 @@ class BookmarkService:
                 og_image=metadata.og_image,
             )
 
-            logger.info(f"Creating bookmark file: {bookmark_path}")
+            # Check if file already exists (for updates)
+            existing = self.github.get_file_content(bookmark_path)
+            existing_sha = existing[1] if existing else None
+
+            logger.info(f"{'Updating' if existing_sha else 'Creating'} bookmark file: {bookmark_path}")
             self.github.update_file(
                 path=bookmark_path,
                 content=bookmark_content,
-                message=f"Add bookmark: {title[:50]}",
-                sha=None,  # Create new file
+                message=f"{'Update' if existing_sha else 'Add'} bookmark: {title[:50]}",
+                sha=existing_sha,
             )
 
             return BookmarkSaveResponse(
