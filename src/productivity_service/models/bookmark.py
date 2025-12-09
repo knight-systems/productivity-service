@@ -55,7 +55,8 @@ class BookmarkSaveRequest(BaseModel):
 
     url: HttpUrl
     mode: BookmarkMode = BookmarkMode.AUTO
-    title: str | None = None  # Optional override
+    title: str | None = None  # Optional override (or from browser)
+    meta_description: str | None = None  # From browser (bypasses fetch)
     notes: str | None = None  # User notes
     tags: list[str] = Field(default_factory=list)  # User-specified tags
 

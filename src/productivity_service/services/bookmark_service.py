@@ -60,9 +60,28 @@ class BookmarkService:
         date_str = today.strftime("%Y-%m-%d")
 
         try:
-            # Step 1: Fetch metadata
-            logger.info(f"Fetching metadata for {url}")
-            metadata = await fetch_metadata(url)
+            # Step 1: Get metadata (from client or fetch)
+            if request.title and request.meta_description:
+                # Client provided metadata (e.g., Chrome extension) - skip fetch
+                logger.info(f"Using client-provided metadata for {url}")
+                metadata = PageMetadata(
+                    url=url,
+                    title=request.title,
+                    description=request.meta_description,
+                )
+            else:
+                # Fetch metadata from URL
+                logger.info(f"Fetching metadata for {url}")
+                try:
+                    metadata = await fetch_metadata(url)
+                except Exception as e:
+                    logger.warning(f"Failed to fetch metadata: {e}")
+                    # Fallback: use client-provided data or extract from URL
+                    metadata = PageMetadata(
+                        url=url,
+                        title=request.title,
+                        description=request.meta_description,
+                    )
 
             # Determine title (user override > og:title > title)
             title = request.title or metadata.best_title or _extract_title_from_url(url)
