@@ -8,71 +8,41 @@
 # Optional parameters:
 # @raycast.icon images/bookmark.png
 # @raycast.packageName Productivity
-# @raycast.description Save bookmark to Obsidian (daily note + permanent file)
+# @raycast.description Save bookmark to Obsidian via productivity service
 
 # Arguments:
 # @raycast.argument1 { "type": "text", "placeholder": "URL" }
-# @raycast.argument2 { "type": "text", "placeholder": "Title" }
-# @raycast.argument3 { "type": "text", "placeholder": "Notes", "optional": true }
+# @raycast.argument2 { "type": "text", "placeholder": "Notes", "optional": true }
 
 URL="$1"
-TITLE="$2"
-NOTES="${3:-}"
-DATE=$(date +"%Y-%m-%d")
+NOTES="${2:-}"
 
-if [ -z "$URL" ] || [ -z "$TITLE" ]; then
-    echo "Error: URL and Title are required"
+if [ -z "$URL" ]; then
+    echo "Error: URL is required"
     exit 1
 fi
 
-# Build entry for daily note
+# API endpoint - set via environment or use default
+API_URL="${PRODUCTIVITY_API_URL:-https://el5c54bhs2.execute-api.us-east-1.amazonaws.com}"
+
+# Build JSON payload
 if [ -n "$NOTES" ]; then
-    ENTRY="- [$TITLE]($URL) - $NOTES"
+    JSON_PAYLOAD="{\"url\": \"$URL\", \"notes\": \"$NOTES\", \"mode\": \"auto\"}"
 else
-    ENTRY="- [$TITLE]($URL)"
+    JSON_PAYLOAD="{\"url\": \"$URL\", \"mode\": \"auto\"}"
 fi
 
-# URL encode the entry
-ENCODED_ENTRY=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$ENTRY'))")
+# Make API request
+RESPONSE=$(curl -s -X POST "$API_URL/bookmarks/save" \
+    -H "Content-Type: application/json" \
+    -d "$JSON_PAYLOAD")
 
-# Step 1: Ensure daily note exists (workaround for Advanced URI issue #48)
-open "obsidian://advanced-uri?vault=Second%20Brain&daily=true&mode=append&data="
-sleep 0.5
-
-# Step 2: Append to Bookmarks section
-# 🔖 Bookmarks = %F0%9F%94%96%20Bookmarks
-open "obsidian://advanced-uri?vault=Second%20Brain&daily=true&heading=%F0%9F%94%96%20Bookmarks&mode=append&data=$ENCODED_ENTRY"
-
-# Step 3: Create permanent bookmark file
-# Sanitize title for filename (remove special chars, lowercase, replace spaces with dashes)
-SAFE_TITLE=$(echo "$TITLE" | tr -cd '[:alnum:] ' | tr ' ' '-' | tr '[:upper:]' '[:lower:]' | head -c 50)
-FILENAME="$DATE-$SAFE_TITLE"
-
-# Build bookmark file content with frontmatter
-read -r -d '' BOOKMARK_CONTENT << ENDOFFILE
----
-title: $TITLE
-url: $URL
-tags: [bookmark]
-created: $DATE
----
-
-# $TITLE
-
-## Source
-$URL
-
-## Notes
-$NOTES
-
-## Related
-
-ENDOFFILE
-
-# URL encode the content
-ENCODED_CONTENT=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.stdin.read()))" <<< "$BOOKMARK_CONTENT")
-
-# Create the bookmark file
-open "obsidian://advanced-uri?vault=Second%20Brain&filepath=Bookmarks/$FILENAME.md&mode=new&data=$ENCODED_CONTENT"
-
-echo "Bookmark saved: $TITLE"
+# Check for success
+if echo "$RESPONSE" | grep -q '"success":true'; then
+    TITLE=$(echo "$RESPONSE" | grep -o '"title":"[^"]*"' | head -1 | cut -d'"' -f4)
+    echo "Bookmark saved: $TITLE"
+else
+    ERROR=$(echo "$RESPONSE" | grep -o '"detail":"[^"]*"' | cut -d'"' -f4)
+    echo "Error: ${ERROR:-Failed to save bookmark}"
+    exit 1
+fi
