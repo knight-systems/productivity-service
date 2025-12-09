@@ -69,35 +69,38 @@ class BookmarkService:
 
             # Step 2: Determine enrichment level
             # - quick: No AI, just meta tags
-            # - auto: Always get AI tags, use meta summary if good quality
-            # - rich: Full AI processing (fetch full content for summary + tags)
-            skip_ai = request.mode == BookmarkMode.QUICK
-
+            # - auto: AI tags from meta description (no full fetch), meta summary
+            # - rich: Full page fetch + AI summary + tags
             summary: str | None = None
             auto_tags: list[str] = []
             category: str | None = None
 
-            if skip_ai:
-                # Quick mode: just use meta description
+            if request.mode == BookmarkMode.QUICK:
+                # Quick mode: just use meta description, no AI
                 summary = metadata.best_description
+
+            elif request.mode == BookmarkMode.AUTO:
+                # Auto mode: generate tags from title + meta description (fast)
+                summary = metadata.best_description
+                try:
+                    meta_content = f"{title}\n\n{metadata.best_description or ''}"
+                    enrichment = self._get_ai_tags(meta_content)
+                    auto_tags = enrichment.tags
+                    category = enrichment.category
+                except Exception as e:
+                    logger.warning(f"Failed to generate tags: {e}")
+
             else:
-                # Auto and Rich modes: always get AI tags
+                # Rich mode: full fetch + AI summary + tags
                 logger.info(f"Fetching full content for AI enrichment: {url}")
                 try:
                     content = await fetch_full_content(url)
                     enrichment = self._get_ai_enrichment(content.text_content, title)
+                    summary = enrichment.summary
                     auto_tags = enrichment.tags
                     category = enrichment.category
-
-                    # For summary: use AI summary for rich mode, or if meta is low quality
-                    if request.mode == BookmarkMode.RICH or not is_quality_metadata(metadata):
-                        summary = enrichment.summary
-                    else:
-                        # Auto mode with good meta: use meta description as summary
-                        summary = metadata.best_description or enrichment.summary
                 except Exception as e:
                     logger.warning(f"Failed to enrich bookmark: {e}")
-                    # Continue without enrichment
                     summary = metadata.best_description
 
             # Combine user tags with auto-generated tags
@@ -226,6 +229,68 @@ Return ONLY valid JSON, no explanation."""
 
         except Exception as e:
             logger.error(f"AI enrichment failed: {e}")
+            return AIEnrichment(
+                summary="",
+                tags=[],
+                category="other",
+            )
+
+    def _get_ai_tags(self, content: str) -> AIEnrichment:
+        """Get AI-generated tags from title and description (lightweight).
+
+        Args:
+            content: Title and meta description text
+
+        Returns:
+            AIEnrichment with tags and category (no summary)
+        """
+        prompt = f"""Generate tags for this webpage. Return JSON:
+{{
+  "tags": ["tag1", "tag2", "tag3"],
+  "category": "category"
+}}
+
+Rules:
+- tags: 3-5 relevant tags in kebab-case (e.g., "machine-learning", "web-dev")
+- category: One of: tech, reference, article, tool, tutorial, news, personal, business, design, other
+
+Content:
+{content[:1000]}
+
+Return ONLY valid JSON, no explanation."""
+
+        try:
+            client = boto3.client("bedrock-runtime", region_name=settings.aws_region)
+
+            response = client.invoke_model(
+                modelId=settings.bedrock_model_id,
+                body=json.dumps({
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 200,
+                    "messages": [{"role": "user", "content": prompt}],
+                }),
+                contentType="application/json",
+            )
+
+            response_body = json.loads(response["body"].read())
+            response_text = response_body["content"][0]["text"]
+
+            # Extract JSON from response
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0]
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0]
+
+            data = json.loads(response_text.strip())
+
+            return AIEnrichment(
+                summary="",
+                tags=data.get("tags", []),
+                category=data.get("category", "other"),
+            )
+
+        except Exception as e:
+            logger.error(f"AI tag generation failed: {e}")
             return AIEnrichment(
                 summary="",
                 tags=[],
