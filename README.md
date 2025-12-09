@@ -1,5 +1,38 @@
 # Productivity Service
 
+Personal productivity automation suite with AI-powered tools.
+
+## Components
+
+| Component | Description | Docs |
+|-----------|-------------|------|
+| **Task Capture API** | Voice-to-task with AI parsing for OmniFocus | [Below](#task-capture-api) |
+| **Filesystem Daemon** | AI-powered Desktop/Downloads organization | [filesystem-daemon/](filesystem-daemon/README.md) |
+| **Obsidian Sync** | Daily note automation | [obsidian-sync/](obsidian-sync/README.md) |
+| **Raycast Scripts** | Mac script commands | [raycast/](raycast/README.md) |
+
+## Filesystem Daemon (NEW)
+
+Organize your Desktop and Downloads with AI classification:
+
+```bash
+# Interactive organization workflow
+uv run python -m filesystem-daemon.cli organize ~/Desktop
+```
+
+Features:
+- Rule-based + AI classification
+- Organizes into life domains (Finance, Health, Work, etc.)
+- Standardized file renaming (YYYY-MM-DD-description.ext)
+- Interactive review before execution
+- Learns from your corrections
+
+See [filesystem-daemon/README.md](filesystem-daemon/README.md) for full documentation.
+
+---
+
+# Task Capture API
+
 Voice-to-task capture with AI tag parsing for OmniFocus.
 
 Captures tasks via:

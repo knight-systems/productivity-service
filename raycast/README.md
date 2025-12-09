@@ -15,10 +15,13 @@ This creates symlinks to `~/.config/raycast/scripts/`, enabling the same setup a
 
 | Command | Description | Hotkey Suggestion |
 |---------|-------------|-------------------|
+| **Organize Files** | Scan, review, and organize Desktop/Downloads | `⌥⌘O` |
 | **Capture Task** | Send task to OmniFocus via AI parsing | `⌥⌘T` |
 | **Journal** | Add entry to Obsidian Brain Dump | `⌥⌘J` |
 | **Bookmark** | Save URL to Obsidian (dual storage) | `⌥⌘B` |
 | **Quick Log** | Add to specific daily note section | `⌥⌘L` |
+| **Morning Brief** | Generate morning summary | `⌥⌘M` |
+| **Evening Summary** | Generate evening summary | `⌥⌘E` |
 
 ## Prerequisites
 
@@ -28,6 +31,18 @@ This creates symlinks to `~/.config/raycast/scripts/`, enabling the same setup a
 - Productivity service API deployed (for Capture Task)
 
 ## Command Details
+
+### Organize Files
+
+Opens a terminal with the interactive file organization workflow. Scans Desktop (or specified directory), classifies files using rules + AI, and lets you review/modify plans before executing.
+
+**Usage:** `Organize Files` or `Organize Files ~/Downloads`
+
+**Workflow:**
+1. Scans directory and classifies files
+2. Auto-approves obvious deletes (screenshots, installers)
+3. Interactive review of moves with keyboard shortcuts
+4. Execute approved actions
 
 ### Capture Task
 
@@ -123,6 +138,7 @@ Since scripts are symlinked from this repo, you can sync across machines:
 
 ## Related
 
+- [Filesystem Daemon Documentation](../filesystem-daemon/README.md) - Full CLI reference for file organization
+- [Productivity Service API](../README.md) - Main project documentation
 - [Raycast Script Commands Repo](https://github.com/raycast/script-commands)
 - [Obsidian Advanced URI](https://github.com/Vinzent03/obsidian-advanced-uri)
-- [Productivity Service API](../README.md)
