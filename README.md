@@ -8,6 +8,7 @@ Personal productivity automation suite with AI-powered tools.
 |-----------|-------------|------|
 | **Task Capture API** | Voice-to-task with AI parsing for OmniFocus | [Below](#task-capture-api) |
 | **Filesystem Daemon** | AI-powered Desktop/Downloads organization | [filesystem-daemon/](filesystem-daemon/README.md) |
+| **Obsidian Cleanup** | AI-powered vault note organization | [obsidian-cleanup/](obsidian-cleanup/README.md) |
 | **Obsidian Sync** | Daily note automation | [obsidian-sync/](obsidian-sync/README.md) |
 | **Raycast Scripts** | Mac script commands | [raycast/](raycast/README.md) |
 
