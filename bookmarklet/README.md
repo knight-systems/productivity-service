@@ -36,7 +36,7 @@ You could add this as a static file served by your Lambda function or host it al
 Once you have the helper page URL, create the bookmarklet:
 
 1. Create a new bookmark in your browser
-2. Name it: "💾 Save Bookmark" or "📚 Read Later"
+2. Name it: "💾 Save Bookmark" or "📚 Review Later"
 3. For the URL, use this code (replace `HELPER_URL` with your actual URL):
 
 ```javascript
@@ -52,7 +52,7 @@ javascript:(function(){var m=function(n){var e=document.querySelector('meta[name
 
 1. Navigate to any webpage you want to save
 2. Click the bookmarklet in your bookmarks bar
-3. A popup will open showing mode selection (Bookmark, Read Later, Must Read)
+3. A popup will open showing mode selection (Bookmark, Review Later, Must Review)
 4. It will auto-save after 1 second (or click a mode to change before it saves)
 5. The popup will show success/error and auto-close
 
@@ -85,7 +85,7 @@ javascript:(function() {
 
 ## Features
 
-- **Mode Selection**: Choose between Bookmark, Read Later, or Must Read
+- **Mode Selection**: Choose between Bookmark, Review Later, or Must Review
 - **Auto-save**: Saves after 1 second (you can click a different mode before that)
 - **Visual Feedback**: Shows loading state, success with tags/time, or error messages
 - **Auto-close**: Popup closes automatically after success
@@ -120,7 +120,7 @@ setTimeout(save, 1000); // Change 1000 to desired milliseconds
 ### Change Default Mode
 Edit line in `bookmark-helper.html`:
 ```javascript
-let selectedMode = 'bookmark'; // Change to 'read-later' or 'must-read'
+let selectedMode = 'bookmark'; // Change to 'review-later' or 'must-review'
 ```
 
 ### Change Popup Size

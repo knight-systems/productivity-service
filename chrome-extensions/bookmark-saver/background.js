@@ -4,13 +4,13 @@ const QUEUE_API_URL = 'https://el5c54bhs2.execute-api.us-east-1.amazonaws.com/qu
 // Create context menu items on install
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
-    id: 'read-later',
-    title: 'Read Later',
+    id: 'review-later',
+    title: 'Review Later',
     contexts: ['page', 'link'],
   });
   chrome.contextMenus.create({
-    id: 'read-later-must',
-    title: 'Read Later (Must Read)',
+    id: 'review-later-must',
+    title: 'Review Later (Must Review)',
     contexts: ['page', 'link'],
   });
 });
@@ -18,7 +18,7 @@ chrome.runtime.onInstalled.addListener(() => {
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const url = info.linkUrl || info.pageUrl;
-  const priority = info.menuItemId === 'read-later-must' ? 'must-read' : 'normal';
+  const priority = info.menuItemId === 'review-later-must' ? 'must-review' : 'normal';
 
   if (!url || url.startsWith('chrome://') || url.startsWith('chrome-extension://')) {
     showNotification('Cannot save', 'Cannot add this to queue');
@@ -63,10 +63,10 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         message += ` (${data.content_type})`;
       }
       if (data.is_snack) {
-        message += '\n🍿 Quick read!';
+        message += '\n🍿 Quick review!';
       }
 
-      const priorityLabel = priority === 'must-read' ? '🔥 Must Read' : '📚 Read Later';
+      const priorityLabel = priority === 'must-review' ? '🔥 Must Review' : '📚 Review Later';
       showNotification(priorityLabel, message);
     } else {
       throw new Error(data.error || data.detail || 'Failed to add to queue');

@@ -1,14 +1,14 @@
-# 📚 Reading Queue
+# 📚 Review Queue
 
-## 🔥 Must Read
+## 🔥 Must Review
 ```dataview
 TABLE WITHOUT ID
   link(file.path, title) as "Title",
   estimated_time + " min" as "Time",
   content_type as "Type",
   created as "Added"
-FROM "ReadQueue"
-WHERE queue_status = "unread" AND priority = "must-read"
+FROM "ReviewQueue"
+WHERE queue_status = "unreviewed" AND priority = "must-review"
 SORT created DESC
 ```
 
@@ -18,8 +18,8 @@ TABLE WITHOUT ID
   link(file.path, title) as "Title",
   estimated_time + " min" as "Time",
   content_type as "Type"
-FROM "ReadQueue"
-WHERE queue_status = "unread" AND priority = "snack"
+FROM "ReviewQueue"
+WHERE queue_status = "unreviewed" AND priority = "snack"
 SORT created DESC
 ```
 
@@ -30,8 +30,8 @@ TABLE WITHOUT ID
   estimated_time + " min" as "Time",
   content_type as "Type",
   created as "Added"
-FROM "ReadQueue"
-WHERE queue_status = "unread" AND priority = "normal"
+FROM "ReviewQueue"
+WHERE queue_status = "unreviewed" AND priority = "normal"
 SORT created DESC
 LIMIT 20
 ```
@@ -42,19 +42,19 @@ TABLE WITHOUT ID
   link(file.path, title) as "Title",
   content_type as "Type",
   created as "Added"
-FROM "ReadQueue"
-WHERE queue_status = "unread" AND priority = "someday"
+FROM "ReviewQueue"
+WHERE queue_status = "unreviewed" AND priority = "someday"
 SORT created DESC
 ```
 
-## 📚 Currently Reading
+## 📚 Currently Reviewing
 ```dataview
 TABLE WITHOUT ID
   link(file.path, title) as "Title",
   estimated_time + " min" as "Time",
   last_touched as "Started"
-FROM "ReadQueue"
-WHERE queue_status = "reading"
+FROM "ReviewQueue"
+WHERE queue_status = "reviewing"
 SORT last_touched DESC
 ```
 
@@ -64,7 +64,7 @@ TABLE WITHOUT ID
   link(file.path, title) as "Title",
   content_type as "Type",
   consumed_at as "Finished"
-FROM "ReadQueue"
+FROM "ReviewQueue"
 WHERE queue_status = "consumed"
 SORT consumed_at DESC
 LIMIT 10
@@ -76,7 +76,7 @@ LIMIT 10
 ```dataview
 TABLE WITHOUT ID
   length(rows) as "Count"
-FROM "ReadQueue"
-WHERE queue_status = "unread"
+FROM "ReviewQueue"
+WHERE queue_status = "unreviewed"
 GROUP BY priority
 ```

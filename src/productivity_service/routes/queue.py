@@ -1,4 +1,4 @@
-"""Queue API routes for managing read queue status."""
+"""Queue API routes for managing review queue status."""
 
 import logging
 import os
@@ -11,8 +11,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, HttpUrl
 
 from ..models.queue import ContentType, QueuePriority, QueueStatus
+from ..models.task import TaskCreateRequest
 from ..services.github_service import GitHubService
 from ..services.obsidian_service import ObsidianService
+from ..services.omnifocus import create_omnifocus_task
 from ..services.page_fetcher import fetch_metadata
 
 logger = logging.getLogger(__name__)
@@ -20,7 +22,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/queue", tags=["queue"])
 
 # Folder for queue items
-QUEUE_FOLDER = "ReadQueue"
+QUEUE_FOLDER = "ReviewQueue"
 
 # Content type detection patterns
 CONTENT_TYPE_PATTERNS = {
@@ -51,8 +53,8 @@ CONTENT_TYPE_PATTERNS = {
     ],
 }
 
-# Default reading times by content type (minutes)
-DEFAULT_READ_TIMES = {
+# Default review times by content type (minutes)
+DEFAULT_REVIEW_TIMES = {
     ContentType.TWEET: 1,
     ContentType.ARTICLE: 5,
     ContentType.VIDEO: 10,
@@ -88,7 +90,7 @@ class StatusUpdateRequest(BaseModel):
 
 
 class QueueAddRequest(BaseModel):
-    """Request to add item to read queue."""
+    """Request to add item to review queue."""
 
     url: HttpUrl
     title: str | None = None
@@ -108,6 +110,7 @@ class QueueAddResponse(BaseModel):
     estimated_time: int
     priority: QueuePriority
     is_snack: bool
+    omnifocus_task_created: bool = False
     error: str | None = None
 
 
@@ -120,13 +123,13 @@ def _detect_content_type(url: str) -> ContentType:
     return ContentType.ARTICLE
 
 
-def _estimate_read_time(content_type: ContentType, description: str | None = None) -> int:
-    """Estimate reading time in minutes."""
+def _estimate_review_time(content_type: ContentType, description: str | None = None) -> int:
+    """Estimate review time in minutes."""
     if description and content_type == ContentType.ARTICLE:
         desc_words = len(description.split())
         estimated_total = desc_words * 10
         return max(1, estimated_total // 200)
-    return DEFAULT_READ_TIMES.get(content_type, 5)
+    return DEFAULT_REVIEW_TIMES.get(content_type, 5)
 
 
 def _generate_queue_id(title: str, date_str: str) -> str:
@@ -136,6 +139,51 @@ def _generate_queue_id(title: str, date_str: str) -> str:
     safe_title = re.sub(r"-+", "-", safe_title).strip("-")
     safe_title = safe_title[:50]
     return f"{date_str}-{safe_title}"
+
+
+def _format_content_type_display(content_type: ContentType) -> str:
+    """Format content type for display in task titles."""
+    if content_type == ContentType.DOC:
+        return "gdoc"
+    return content_type.value
+
+
+async def _handle_must_review_item(
+    title: str,
+    url: str,
+    content_type: ContentType,
+    estimated_time: int,
+    is_snack: bool,
+    queue_id: str,
+) -> QueueAddResponse | None:
+    """Handle must-review items by creating OmniFocus task.
+
+    Falls back to Obsidian if OmniFocus fails (returns None).
+    """
+    type_display = _format_content_type_display(content_type)
+    task_title = f"Review: {title} [{type_display}]"
+
+    try:
+        task_request = TaskCreateRequest(title=task_title, note=url)
+        result = await create_omnifocus_task(task_request)
+
+        if result.success:
+            return QueueAddResponse(
+                success=True,
+                queue_id=queue_id,
+                title=title,
+                url=url,
+                content_type=content_type,
+                estimated_time=estimated_time,
+                priority=QueuePriority.MUST_REVIEW,
+                is_snack=is_snack,
+                omnifocus_task_created=True,
+            )
+    except Exception as e:
+        logger.warning(f"OmniFocus failed, falling back to Obsidian: {e}")
+
+    # Return None to signal caller to continue with Obsidian flow
+    return None
 
 
 def _build_queue_file(
@@ -159,7 +207,7 @@ def _build_queue_file(
         f"created: {date_str}",
         f"content_type: {content_type.value}",
         f"estimated_time: {estimated_time}",
-        "queue_status: unread",
+        "queue_status: unreviewed",
         f"priority: {priority.value}",
         f"added_to_queue: {date_str}",
         f"last_touched: {date_str}",
@@ -247,10 +295,10 @@ def _update_frontmatter_field(content: str, field: str, value: str) -> str:
 
 @router.post("/add", response_model=QueueAddResponse)
 async def add_to_queue(request: QueueAddRequest) -> QueueAddResponse:
-    """Add an item to the read queue.
+    """Add an item to the review queue.
 
-    Creates a new file in ReadQueue/ folder with queue tracking fields.
-    Detects content type and estimates reading time.
+    Creates a new file in ReviewQueue/ folder with queue tracking fields.
+    Detects content type and estimates review time.
     """
     url = str(request.url)
     tz = ZoneInfo("America/New_York")
@@ -279,14 +327,30 @@ async def add_to_queue(request: QueueAddRequest) -> QueueAddResponse:
 
         # Detect content type and estimate time
         content_type = _detect_content_type(url)
-        estimated_time = _estimate_read_time(content_type, description)
+        estimated_time = _estimate_review_time(content_type, description)
 
         # Determine priority (snacks auto-detected)
         is_snack = estimated_time <= SNACK_THRESHOLD
         priority = QueuePriority.SNACK if is_snack else request.priority
 
-        # Generate ID and build file
+        # Generate ID
         queue_id = _generate_queue_id(title, date_str)
+
+        # Handle must-review items via OmniFocus
+        if priority == QueuePriority.MUST_REVIEW:
+            result = await _handle_must_review_item(
+                title=title,
+                url=url,
+                content_type=content_type,
+                estimated_time=estimated_time,
+                is_snack=is_snack,
+                queue_id=queue_id,
+            )
+            if result:
+                return result
+            # If None returned, continue with Obsidian fallback below
+
+        # Create file in Obsidian ReviewQueue
         queue_path = f"{QUEUE_FOLDER}/{queue_id}.md"
         queue_content = _build_queue_file(
             title=title,
@@ -307,7 +371,7 @@ async def add_to_queue(request: QueueAddRequest) -> QueueAddResponse:
         github.update_file(
             path=queue_path,
             content=queue_content,
-            message=f"{'Update' if existing_sha else 'Add to'} read queue: {title[:50]}",
+            message=f"{'Update' if existing_sha else 'Add to'} review queue: {title[:50]}",
             sha=existing_sha,
         )
 
@@ -349,7 +413,7 @@ async def consume_item(
     - consumed_at → current timestamp
     - Optionally adds notes if provided
 
-    Looks in ReadQueue/ folder first, then Bookmarks/.
+    Looks in ReviewQueue/ folder first, then Bookmarks/.
     """
     try:
         github = _get_github_service()
@@ -413,7 +477,7 @@ async def consume_item(
         return ConsumeResponse(
             success=False,
             bookmark_id=item_id,
-            status=QueueStatus.UNREAD,
+            status=QueueStatus.UNREVIEWED,
             error=str(e),
         )
 
@@ -425,8 +489,8 @@ async def update_status(
 ) -> ConsumeResponse:
     """Update queue status for an item.
 
-    Useful for marking as 'reading' or 'archived'.
-    Looks in ReadQueue/ folder first, then Bookmarks/.
+    Useful for marking as 'reviewing' or 'archived'.
+    Looks in ReviewQueue/ folder first, then Bookmarks/.
     """
     try:
         github = _get_github_service()
@@ -478,6 +542,6 @@ async def update_status(
         return ConsumeResponse(
             success=False,
             bookmark_id=item_id,
-            status=QueueStatus.UNREAD,
+            status=QueueStatus.UNREVIEWED,
             error=str(e),
         )

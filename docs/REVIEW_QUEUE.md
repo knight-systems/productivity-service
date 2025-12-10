@@ -1,11 +1,11 @@
-# Read Queue System
+# Review Queue System
 
-A system for saving links/resources to consume later, separate from bookmarking (which is for content you've already read).
+A system for saving links/resources to consume later, separate from bookmarking (which is for content you've already reviewed).
 
 ## Overview
 
 - **Bookmarks** (`/bookmarks/save`) = Content you've already consumed, saved for reference
-- **Read Queue** (`/queue/add`) = Content you want to consume later
+- **Review Queue** (`/queue/add`) = Content you want to consume later
 
 ## V1 Implementation (Current)
 
@@ -13,13 +13,13 @@ A system for saving links/resources to consume later, separate from bookmarking 
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/queue/add` | Add item to read queue |
+| POST | `/queue/add` | Add item to review queue |
 | PATCH | `/queue/{id}/consume` | Mark item as consumed |
 | PATCH | `/queue/{id}/status` | Update queue status |
 
 #### POST /queue/add
 
-Adds a URL to the read queue with automatic content detection.
+Adds a URL to the review queue with automatic content detection.
 
 **Request:**
 ```json
@@ -32,7 +32,7 @@ Adds a URL to the read queue with automatic content detection.
 }
 ```
 
-**Priority values:** `must-read`, `normal`, `someday`, `snack` (auto-detected)
+**Priority values:** `must-review`, `normal`, `someday`, `snack` (auto-detected)
 
 **Response:**
 ```json
@@ -55,7 +55,7 @@ Marks a queue item as consumed.
 **Request (optional):**
 ```json
 {
-  "notes": "Key takeaways from reading"
+  "notes": "Key takeaways from reviewing"
 }
 ```
 
@@ -66,11 +66,11 @@ Updates queue status without marking as consumed.
 **Request:**
 ```json
 {
-  "status": "reading"
+  "status": "reviewing"
 }
 ```
 
-**Status values:** `unread`, `reading`, `consumed`, `archived`
+**Status values:** `unreviewed`, `reviewing`, `consumed`, `archived`
 
 ### Content Type Detection
 
@@ -98,11 +98,11 @@ Automatically detected from URL patterns:
 
 ### Snack Detection
 
-Content estimated at 2 minutes or less is automatically marked as a "snack" - quick reads perfect for small pockets of downtime.
+Content estimated at 2 minutes or less is automatically marked as a "snack" - quick reviews perfect for small pockets of downtime.
 
 ### Storage
 
-Queue items are stored in `ReadQueue/` folder in Obsidian vault with frontmatter:
+Queue items are stored in `ReviewQueue/` folder in Obsidian vault with frontmatter:
 
 ```yaml
 ---
@@ -111,7 +111,7 @@ url: https://example.com
 created: 2025-12-10
 content_type: article
 estimated_time: 5
-queue_status: unread
+queue_status: unreviewed
 priority: normal
 added_to_queue: 2025-12-10
 last_touched: 2025-12-10
@@ -123,22 +123,22 @@ consumed_at:
 
 The extension now has two actions:
 
-1. **Click icon** = Save as bookmark (for content you've read)
+1. **Click icon** = Save as bookmark (for content you've reviewed)
 2. **Right-click menu**:
-   - "Read Later" = Add to queue (normal priority)
-   - "Read Later (Must Read)" = Add to queue (must-read priority)
+   - "Review Later" = Add to queue (normal priority)
+   - "Review Later (Must Review)" = Add to queue (must-review priority)
 
 Works on both the current page and links you right-click on.
 
 ### Obsidian Dataview Template
 
-Copy `obsidian-templates/Reading Queue.md` to your vault to get a queue dashboard with sections:
+Copy `obsidian-templates/Review Queue.md` to your vault to get a queue dashboard with sections:
 
-- Must Read
+- Must Review
 - Snacks (< 2 min)
 - Up Next
 - Someday
-- Currently Reading
+- Currently Reviewing
 - Recently Consumed
 - Queue Stats
 
@@ -149,7 +149,7 @@ Copy `obsidian-templates/Reading Queue.md` to your vault to get a queue dashboar
 ### Phase 2: Priority Decay & Queue API
 
 **Priority decay automation:**
-- `must-read` → `normal` after 7 days untouched
+- `must-review` → `normal` after 7 days untouched
 - `normal` → `someday` after 14 days untouched
 - Implemented on-read (lazy evaluation when queue is fetched)
 
@@ -157,11 +157,11 @@ Copy `obsidian-templates/Reading Queue.md` to your vault to get a queue dashboar
 ```
 GET /queue
   - List queue items with filtering
-  - ?status=unread&priority=must-read&limit=10
+  - ?status=unreviewed&priority=must-review&limit=10
 ```
 
 **Raycast commands:**
-- Add to Read Queue command
+- Add to Review Queue command
 - View queue command
 
 ### Phase 3: Smart Suggest
@@ -195,8 +195,8 @@ Response:
 ### Phase 4: Mobile & Consumption Flow
 
 **iOS Shortcuts:**
-- Share sheet "Add to Read Queue"
-- "What to Read" shortcut (calls /queue/suggest)
+- Share sheet "Add to Review Queue"
+- "What to Review" shortcut (calls /queue/suggest)
 - Quick "Mark Consumed" action
 
 **Consumption notes flow:**
@@ -210,7 +210,7 @@ Response:
 - Sync to Obsidian files
 
 **Statistics/insights:**
-- Reading velocity
+- Review velocity
 - Content type breakdown
 - Queue growth trends
 
@@ -224,11 +224,11 @@ Response:
 
 ### New Files
 - `src/productivity_service/routes/queue.py` - Queue API endpoints
-- `obsidian-templates/Reading Queue.md` - Dataview template
+- `obsidian-templates/Review Queue.md` - Dataview template
 
 ### Modified Files
 - `src/productivity_service/main.py` - Added queue router
 - `src/productivity_service/models/bookmark.py` - Added QueueStatus, QueuePriority, ContentType enums
 - `src/productivity_service/services/bookmark_service.py` - Added content type detection (for bookmark response)
-- `chrome-extensions/bookmark-saver/background.js` - Added context menu for Read Later
+- `chrome-extensions/bookmark-saver/background.js` - Added context menu for Review Later
 - `chrome-extensions/bookmark-saver/manifest.json` - Added contextMenus permission

@@ -85,7 +85,7 @@ javascript:(function(){var m=function(n){var e=document.querySelector('meta[name
 1. Navigate to any article (try this README on GitHub!)
 2. Click your bookmarklet
 3. A popup should open showing:
-   - Mode selection (Bookmark / Read Later / Must Read)
+   - Mode selection (Bookmark / Review Later / Must Review)
    - Loading indicator
    - Success message with tags (or error if something went wrong)
 4. Popup auto-closes after success
@@ -120,12 +120,12 @@ javascript:(function(){var m=function(n){var e=document.querySelector('meta[name
 The popup offers 3 modes:
 
 1. **📑 Bookmark** - Saves immediately with AI-generated tags
-2. **📚 Read Later** - Adds to your reading queue (normal priority)
-3. **🔥 Must Read** - Adds to queue with high priority
+2. **📚 Review Later** - Adds to your review queue (normal priority)
+3. **🔥 Must Review** - Adds to queue with high priority
 
 Default is Bookmark. You have 1 second to click a different mode before it auto-saves.
 
 To change the default mode, edit `bookmark-helper.html` line 122:
 ```javascript
-let selectedMode = 'read-later'; // or 'must-read'
+let selectedMode = 'review-later'; // or 'must-review'
 ```

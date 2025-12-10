@@ -130,8 +130,8 @@
   <div class="container">
     <div class="mode-selector" id="modeSelector">
       <button class="mode-btn active" data-mode="bookmark">📑 Bookmark</button>
-      <button class="mode-btn" data-mode="read-later">📚 Read Later</button>
-      <button class="mode-btn" data-mode="must-read">🔥 Must Read</button>
+      <button class="mode-btn" data-mode="review-later">📚 Review Later</button>
+      <button class="mode-btn" data-mode="must-review">🔥 Must Review</button>
     </div>
     <div class="status" id="status">
       <div class="icon">⏳</div>
@@ -195,8 +195,8 @@
             }),
           });
         } else {
-          // Add to read queue
-          const priority = selectedMode === 'must-read' ? 'must-read' : 'normal';
+          // Add to review queue
+          const priority = selectedMode === 'must-review' ? 'must-review' : 'normal';
           response = await fetch(QUEUE_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -222,9 +222,9 @@
     }
 
     function showSuccess(data) {
-      const icon = selectedMode === 'bookmark' ? '✅' : (selectedMode === 'must-read' ? '🔥' : '📚');
+      const icon = selectedMode === 'bookmark' ? '✅' : (selectedMode === 'must-review' ? '🔥' : '📚');
       const title = selectedMode === 'bookmark' ? 'Bookmark Saved!' :
-                    selectedMode === 'must-read' ? 'Added to Must Read!' : 'Added to Read Later!';
+                    selectedMode === 'must-review' ? 'Must Review!' : 'Review Later!';
 
       let message = `<div class="message">${data.title || 'Saved successfully'}</div>`;
 
@@ -237,7 +237,7 @@
       }
 
       if (data.estimated_time) {
-        message += `<div class="message">⏱ ${data.estimated_time} min read`;
+        message += `<div class="message">⏱ ${data.estimated_time} min review`;
         if (data.content_type && data.content_type !== 'article') {
           message += ` (${data.content_type})`;
         }

@@ -1,4 +1,4 @@
-"""Queue models for read queue functionality."""
+"""Queue models for review queue functionality."""
 
 from enum import Enum
 
@@ -6,8 +6,8 @@ from enum import Enum
 class QueueStatus(str, Enum):
     """Queue consumption status."""
 
-    UNREAD = "unread"
-    READING = "reading"
+    UNREVIEWED = "unreviewed"
+    REVIEWING = "reviewing"
     CONSUMED = "consumed"
     ARCHIVED = "archived"
 
@@ -15,10 +15,10 @@ class QueueStatus(str, Enum):
 class QueuePriority(str, Enum):
     """Queue priority levels."""
 
-    MUST_READ = "must-read"  # Important/urgent content
+    MUST_REVIEW = "must-review"  # Important/urgent content
     NORMAL = "normal"  # Standard queue items
     SOMEDAY = "someday"  # Auto-decayed or manually deprioritized
-    SNACK = "snack"  # Quick reads < 2 min
+    SNACK = "snack"  # Quick reviews < 2 min
 
 
 class ContentType(str, Enum):
