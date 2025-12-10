@@ -1,6 +1,89 @@
-const API_URL = 'https://el5c54bhs2.execute-api.us-east-1.amazonaws.com/bookmarks/save';
+const BOOKMARK_API_URL = 'https://el5c54bhs2.execute-api.us-east-1.amazonaws.com/bookmarks/save';
+const QUEUE_API_URL = 'https://el5c54bhs2.execute-api.us-east-1.amazonaws.com/queue/add';
 
-// Handle extension icon click
+// Create context menu items on install
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.create({
+    id: 'read-later',
+    title: 'Read Later',
+    contexts: ['page', 'link'],
+  });
+  chrome.contextMenus.create({
+    id: 'read-later-must',
+    title: 'Read Later (Must Read)',
+    contexts: ['page', 'link'],
+  });
+});
+
+// Handle context menu clicks
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  const url = info.linkUrl || info.pageUrl;
+  const priority = info.menuItemId === 'read-later-must' ? 'must-read' : 'normal';
+
+  if (!url || url.startsWith('chrome://') || url.startsWith('chrome-extension://')) {
+    showNotification('Cannot save', 'Cannot add this to queue');
+    return;
+  }
+
+  // Show saving badge
+  chrome.action.setBadgeText({ text: '...', tabId: tab.id });
+  chrome.action.setBadgeBackgroundColor({ color: '#8b5cf6', tabId: tab.id });
+
+  try {
+    // Extract metadata from the page
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: extractPageMetadata,
+    });
+
+    const metadata = result.result;
+
+    const response = await fetch(QUEUE_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: url,
+        title: metadata.title,
+        meta_description: metadata.description,
+        priority: priority,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      chrome.action.setBadgeText({ text: '📚', tabId: tab.id });
+      chrome.action.setBadgeBackgroundColor({ color: '#8b5cf6', tabId: tab.id });
+
+      let message = data.title;
+      message += `\n⏱ ${data.estimated_time} min`;
+      if (data.content_type !== 'article') {
+        message += ` (${data.content_type})`;
+      }
+      if (data.is_snack) {
+        message += '\n🍿 Quick read!';
+      }
+
+      const priorityLabel = priority === 'must-read' ? '🔥 Must Read' : '📚 Read Later';
+      showNotification(priorityLabel, message);
+    } else {
+      throw new Error(data.error || data.detail || 'Failed to add to queue');
+    }
+  } catch (error) {
+    chrome.action.setBadgeText({ text: '✗', tabId: tab.id });
+    chrome.action.setBadgeBackgroundColor({ color: '#ef4444', tabId: tab.id });
+    showNotification('Error', error.message || 'Failed to add to queue');
+    console.error('Queue add error:', error);
+  }
+
+  setTimeout(() => {
+    chrome.action.setBadgeText({ text: '', tabId: tab.id });
+  }, 3000);
+});
+
+// Handle extension icon click (bookmark)
 chrome.action.onClicked.addListener(async (tab) => {
   if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
     showNotification('Cannot save', 'Cannot bookmark this page');
@@ -20,7 +103,7 @@ chrome.action.onClicked.addListener(async (tab) => {
 
     const metadata = result.result;
 
-    const response = await fetch(API_URL, {
+    const response = await fetch(BOOKMARK_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -40,11 +123,15 @@ chrome.action.onClicked.addListener(async (tab) => {
       chrome.action.setBadgeText({ text: '✓', tabId: tab.id });
       chrome.action.setBadgeBackgroundColor({ color: '#10b981', tabId: tab.id });
 
-      // Show notification with tags
-      const tagsText = data.tags && data.tags.length > 0
-        ? `\nTags: ${data.tags.join(', ')}`
-        : '';
-      showNotification('Bookmark Saved', `${data.title}${tagsText}`);
+      // Build notification message
+      let message = data.title;
+
+      // Add tags
+      if (data.tags && data.tags.length > 0) {
+        message += `\n🏷 ${data.tags.slice(0, 3).join(', ')}`;
+      }
+
+      showNotification('Bookmark Saved', message);
     } else {
       throw new Error(data.error || data.detail || 'Failed to save');
     }
