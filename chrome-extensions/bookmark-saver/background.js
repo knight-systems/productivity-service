@@ -1,5 +1,6 @@
 const BOOKMARK_API_URL = 'https://el5c54bhs2.execute-api.us-east-1.amazonaws.com/bookmarks/save';
 const QUEUE_API_URL = 'https://el5c54bhs2.execute-api.us-east-1.amazonaws.com/queue/add';
+const QUEUE_CONSUME_URL = 'https://el5c54bhs2.execute-api.us-east-1.amazonaws.com/queue';
 
 // Create context menu items on install
 chrome.runtime.onInstalled.addListener(() => {
@@ -13,17 +14,35 @@ chrome.runtime.onInstalled.addListener(() => {
     title: 'Review Later (Must Review)',
     contexts: ['page', 'link'],
   });
+  chrome.contextMenus.create({
+    id: 'separator',
+    type: 'separator',
+    contexts: ['page', 'link'],
+  });
+  chrome.contextMenus.create({
+    id: 'mark-reviewed',
+    title: '✓ Mark as Reviewed',
+    contexts: ['page', 'link'],
+  });
 });
 
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const url = info.linkUrl || info.pageUrl;
-  const priority = info.menuItemId === 'review-later-must' ? 'must-review' : 'normal';
 
   if (!url || url.startsWith('chrome://') || url.startsWith('chrome-extension://')) {
-    showNotification('Cannot save', 'Cannot add this to queue');
+    showNotification('Cannot save', 'Cannot process this page');
     return;
   }
+
+  // Handle "Mark as Reviewed" action
+  if (info.menuItemId === 'mark-reviewed') {
+    await handleMarkReviewed(url, tab);
+    return;
+  }
+
+  // Handle "Review Later" actions
+  const priority = info.menuItemId === 'review-later-must' ? 'must-review' : 'normal';
 
   // Show saving badge
   chrome.action.setBadgeText({ text: '...', tabId: tab.id });
@@ -82,6 +101,41 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     chrome.action.setBadgeText({ text: '', tabId: tab.id });
   }, 3000);
 });
+
+// Handle marking an item as reviewed
+async function handleMarkReviewed(url, tab) {
+  chrome.action.setBadgeText({ text: '...', tabId: tab.id });
+  chrome.action.setBadgeBackgroundColor({ color: '#10b981', tabId: tab.id });
+
+  try {
+    const response = await fetch(`${QUEUE_CONSUME_URL}/consume-by-url`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ url: url }),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      chrome.action.setBadgeText({ text: '✓', tabId: tab.id });
+      chrome.action.setBadgeBackgroundColor({ color: '#10b981', tabId: tab.id });
+      showNotification('✓ Reviewed', 'Item marked as consumed');
+    } else {
+      throw new Error(data.error || data.detail || 'Item not found in queue');
+    }
+  } catch (error) {
+    chrome.action.setBadgeText({ text: '✗', tabId: tab.id });
+    chrome.action.setBadgeBackgroundColor({ color: '#ef4444', tabId: tab.id });
+    showNotification('Error', error.message || 'Failed to mark as reviewed');
+    console.error('Mark reviewed error:', error);
+  }
+
+  setTimeout(() => {
+    chrome.action.setBadgeText({ text: '', tabId: tab.id });
+  }, 3000);
+}
 
 // Handle extension icon click (bookmark)
 chrome.action.onClicked.addListener(async (tab) => {

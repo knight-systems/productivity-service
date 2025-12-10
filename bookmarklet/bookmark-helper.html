@@ -132,6 +132,7 @@
       <button class="mode-btn active" data-mode="bookmark">📑 Bookmark</button>
       <button class="mode-btn" data-mode="review-later">📚 Review Later</button>
       <button class="mode-btn" data-mode="must-review">🔥 Must Review</button>
+      <button class="mode-btn" data-mode="mark-reviewed">✓ Reviewed</button>
     </div>
     <div class="status" id="status">
       <div class="icon">⏳</div>
@@ -147,6 +148,7 @@
   <script>
     const BOOKMARK_API_URL = 'https://el5c54bhs2.execute-api.us-east-1.amazonaws.com/bookmarks/save';
     const QUEUE_API_URL = 'https://el5c54bhs2.execute-api.us-east-1.amazonaws.com/queue/add';
+    const QUEUE_CONSUME_URL = 'https://el5c54bhs2.execute-api.us-east-1.amazonaws.com/queue/consume-by-url';
 
     let selectedMode = 'bookmark';
     let pageData = null;
@@ -194,6 +196,15 @@
               mode: 'auto',
             }),
           });
+        } else if (selectedMode === 'mark-reviewed') {
+          // Mark as reviewed
+          response = await fetch(QUEUE_CONSUME_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url: data.url,
+            }),
+          });
         } else {
           // Add to review queue
           const priority = selectedMode === 'must-review' ? 'must-review' : 'normal';
@@ -222,9 +233,10 @@
     }
 
     function showSuccess(data) {
-      const icon = selectedMode === 'bookmark' ? '✅' : (selectedMode === 'must-review' ? '🔥' : '📚');
-      const title = selectedMode === 'bookmark' ? 'Bookmark Saved!' :
-                    selectedMode === 'must-review' ? 'Must Review!' : 'Review Later!';
+      const icons = { 'bookmark': '✅', 'must-review': '🔥', 'review-later': '📚', 'mark-reviewed': '✓' };
+      const titles = { 'bookmark': 'Bookmark Saved!', 'must-review': 'Must Review!', 'review-later': 'Review Later!', 'mark-reviewed': 'Marked Reviewed!' };
+      const icon = icons[selectedMode] || '✅';
+      const title = titles[selectedMode] || 'Saved!';
 
       let message = `<div class="message">${data.title || 'Saved successfully'}</div>`;
 

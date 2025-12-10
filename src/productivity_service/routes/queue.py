@@ -545,3 +545,96 @@ async def update_status(
             status=QueueStatus.UNREVIEWED,
             error=str(e),
         )
+
+
+class ConsumeByUrlRequest(BaseModel):
+    """Request to consume a queue item by URL."""
+
+    url: HttpUrl
+    notes: str | None = None
+
+
+@router.post("/consume-by-url", response_model=ConsumeResponse)
+async def consume_by_url(request: ConsumeByUrlRequest) -> ConsumeResponse:
+    """Mark a queue item as consumed by looking up its URL.
+
+    Searches ReviewQueue/ folder for a file containing the URL in frontmatter.
+    """
+    url = str(request.url)
+
+    try:
+        github = _get_github_service()
+        tz = ZoneInfo("America/New_York")
+        now = datetime.now(tz)
+        consumed_at = now.strftime("%Y-%m-%d %H:%M")
+
+        # List all files in ReviewQueue folder
+        files = github.list_folder_files(QUEUE_FOLDER)
+
+        # Search for file with matching URL
+        found_path = None
+        found_content = None
+        found_sha = None
+
+        for file_path in files:
+            if not file_path.endswith(".md"):
+                continue
+            result = github.get_file_content(file_path)
+            if not result:
+                continue
+            content, sha = result
+
+            # Check if URL is in frontmatter
+            if f"url: {url}" in content or f"url: {url}\n" in content:
+                found_path = file_path
+                found_content = content
+                found_sha = sha
+                break
+
+        if not found_path:
+            return ConsumeResponse(
+                success=False,
+                bookmark_id="",
+                status=QueueStatus.UNREVIEWED,
+                error=f"No queue item found with URL: {url}",
+            )
+
+        # Update frontmatter fields
+        found_content = _update_frontmatter_field(found_content, "queue_status", "consumed")
+        found_content = _update_frontmatter_field(found_content, "consumed_at", consumed_at)
+        found_content = _update_frontmatter_field(found_content, "last_touched", now.strftime("%Y-%m-%d"))
+
+        # Add notes if provided
+        if request.notes:
+            if "## Notes" in found_content:
+                found_content = found_content.replace(
+                    "## Notes\n",
+                    f"## Notes\n{request.notes}\n",
+                )
+
+        # Extract item_id from path
+        item_id = found_path.split("/")[-1].replace(".md", "")
+
+        # Update file
+        github.update_file(
+            path=found_path,
+            content=found_content,
+            message=f"Mark consumed: {item_id}",
+            sha=found_sha,
+        )
+
+        return ConsumeResponse(
+            success=True,
+            bookmark_id=item_id,
+            status=QueueStatus.CONSUMED,
+            consumed_at=consumed_at,
+        )
+
+    except Exception as e:
+        logger.exception(f"Error consuming item by URL: {url}")
+        return ConsumeResponse(
+            success=False,
+            bookmark_id="",
+            status=QueueStatus.UNREVIEWED,
+            error=str(e),
+        )
