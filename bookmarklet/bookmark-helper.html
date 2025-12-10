@@ -135,9 +135,8 @@
       <button class="mode-btn" data-mode="mark-reviewed">✓ Reviewed</button>
     </div>
     <div class="status" id="status">
-      <div class="icon">⏳</div>
-      <h1>Saving...</h1>
-      <div class="loading"></div>
+      <div class="icon">👆</div>
+      <h1>Choose an action</h1>
     </div>
     <div id="result"></div>
     <div class="buttons" id="buttons" style="display: none;">
@@ -163,12 +162,20 @@
       };
     }
 
-    // Mode selection
+    // Mode selection - clicking a button saves immediately
     document.getElementById('modeSelector').addEventListener('click', (e) => {
       if (e.target.classList.contains('mode-btn')) {
         document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
         e.target.classList.add('active');
         selectedMode = e.target.dataset.mode;
+
+        // Show loading state and save
+        document.getElementById('status').innerHTML = `
+          <div class="icon">⏳</div>
+          <h1>Saving...</h1>
+          <div class="loading"></div>
+        `;
+        save();
       }
     });
 
@@ -282,8 +289,6 @@
       document.getElementById('buttons').style.display = 'flex';
     }
 
-    // Auto-save on load after a short delay (to allow mode selection)
-    setTimeout(save, 1000);
   </script>
 </body>
 </html>
