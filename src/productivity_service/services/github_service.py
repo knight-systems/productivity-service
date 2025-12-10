@@ -146,3 +146,23 @@ class GitHubService:
     def file_exists(self, path: str) -> bool:
         """Check if a file exists in the repository."""
         return self.get_file_content(path) is not None
+
+    def list_folder_files(self, folder_path: str) -> list[str]:
+        """List all files in a folder.
+
+        Args:
+            folder_path: Folder path relative to repository root
+
+        Returns:
+            List of file paths (including folder prefix)
+        """
+        try:
+            contents = self.repo.get_contents(folder_path, ref=self.branch)
+            if not isinstance(contents, list):
+                return []
+            return [item.path for item in contents if item.type == "file"]
+        except GithubException as e:
+            if e.status == 404:
+                return []
+            logger.error(f"Error listing folder {folder_path}: {e}")
+            raise
