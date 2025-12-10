@@ -2,6 +2,40 @@
 
 A bookmarklet alternative to the Chrome extension that works around Content Security Policy (CSP) restrictions on sites like GitHub.
 
+## Quick Setup (Using Hosted Helper)
+
+The helper page is already hosted at: **https://knight-systems.github.io/bookmark-helper/**
+
+### 1. Copy the Bookmarklet Code
+
+Copy the contents of `bookmarklet-code.txt` or use this:
+
+```javascript
+javascript:(function(){var m=function(n){var e=document.querySelector('meta[name="'+n+'"],meta[property="'+n+'"]');return e?e.getAttribute('content'):''};var t=document.title;var d=m('description')||m('og:description')||'';var u=encodeURIComponent(window.location.href);var et=encodeURIComponent(t);var ed=encodeURIComponent(d);window.open('https://knight-systems.github.io/bookmark-helper/?url='+u+'&title='+et+'&description='+ed,'bookmark','width=450,height=550');})();
+```
+
+### 2. Add to Browser
+
+1. Show your bookmarks bar (Cmd+Shift+B on Mac, Ctrl+Shift+B on Windows)
+2. Right-click the bookmarks bar → Add Page / New Bookmark
+3. Name: `💾 Save` (or whatever you like)
+4. URL: Paste the javascript code from step 1
+5. Save
+
+### 3. Use It
+
+1. Navigate to any webpage
+2. Click the bookmarklet
+3. A popup opens with 4 mode buttons:
+   - **📑 Bookmark** - Save with AI-generated tags
+   - **📚 Review Later** - Add to review queue (normal priority)
+   - **🔥 Must Review** - Add to queue (high priority) → creates OmniFocus task
+   - **✓ Reviewed** - Mark current page as consumed
+4. Auto-saves after 1 second (or click a different mode first)
+5. Popup auto-closes after success
+
+---
+
 ## How It Works
 
 The bookmarklet:
@@ -10,89 +44,44 @@ The bookmarklet:
 3. The helper page makes the API call (bypassing CSP since it's on a different domain)
 4. Shows success/error feedback and auto-closes
 
-## Setup
+---
 
-### Step 1: Host the Helper Page
+## Self-Hosting the Helper Page
 
-You need to make `bookmark-helper.html` accessible via a URL. You have several options:
+If you want to host your own copy of the helper page:
 
-**Option A: GitHub Pages (Recommended for personal use)**
-1. Create a new GitHub repo or use an existing one
-2. Upload `bookmark-helper.html` to the repo
-3. Enable GitHub Pages in repo settings
-4. Your helper page will be at: `https://yourusername.github.io/reponame/bookmark-helper.html`
+### Option A: GitHub Pages
 
-**Option B: Deploy to AWS S3**
+1. Create a new GitHub repo (e.g., `bookmark-helper`)
+2. Copy `bookmark-helper.html` as `index.html`
+3. Add the GitHub Pages workflow (see `.github/workflows/pages.yml` in the bookmark-helper repo)
+4. Push to main branch
+5. Your page will be at: `https://YOUR_USERNAME.github.io/bookmark-helper/`
+
+### Option B: AWS S3
+
 ```bash
-# Upload to S3 (if you have the AWS CLI configured)
-aws s3 cp bookmark-helper.html s3://your-bucket-name/ --acl public-read
+aws s3 cp bookmark-helper.html s3://your-bucket-name/ \
+  --acl public-read \
+  --content-type "text/html; charset=utf-8"
 ```
 
-**Option C: Add to your existing productivity service**
-You could add this as a static file served by your Lambda function or host it alongside your service.
+Then update the bookmarklet URL to point to your hosted version.
 
-### Step 2: Create the Bookmarklet
-
-Once you have the helper page URL, create the bookmarklet:
-
-1. Create a new bookmark in your browser
-2. Name it: "💾 Save Bookmark" or "📚 Review Later"
-3. For the URL, use this code (replace `HELPER_URL` with your actual URL):
-
-```javascript
-javascript:(function(){var m=function(n){var e=document.querySelector('meta[name="'+n+'"],meta[property="'+n+'"]');return e?e.getAttribute('content'):''};var t=document.title;var d=m('description')||m('og:description')||'';var u=encodeURIComponent(window.location.href);var et=encodeURIComponent(t);var ed=encodeURIComponent(d);var w=window.open('HELPER_URL?url='+u+'&title='+et+'&description='+ed,'bookmark','width=450,height=550,scrollbars=no,resizable=no');})();
-```
-
-**Example with GitHub Pages:**
-```javascript
-javascript:(function(){var m=function(n){var e=document.querySelector('meta[name="'+n+'"],meta[property="'+n+'"]');return e?e.getAttribute('content'):''};var t=document.title;var d=m('description')||m('og:description')||'';var u=encodeURIComponent(window.location.href);var et=encodeURIComponent(t);var ed=encodeURIComponent(d);var w=window.open('https://yourusername.github.io/bookmark-helper/bookmark-helper.html?url='+u+'&title='+et+'&description='+ed,'bookmark','width=450,height=550,scrollbars=no,resizable=no');})();
-```
-
-### Step 3: Use It
-
-1. Navigate to any webpage you want to save
-2. Click the bookmarklet in your bookmarks bar
-3. A popup will open showing mode selection (Bookmark, Review Later, Must Review)
-4. It will auto-save after 1 second (or click a mode to change before it saves)
-5. The popup will show success/error and auto-close
-
-## Formatted Bookmarklet Code
-
-Here's the same code formatted for readability (minified version above is what you use):
-
-```javascript
-javascript:(function() {
-  // Extract metadata
-  var getMeta = function(name) {
-    var el = document.querySelector('meta[name="' + name + '"],meta[property="' + name + '"]');
-    return el ? el.getAttribute('content') : '';
-  };
-
-  var title = document.title;
-  var description = getMeta('description') || getMeta('og:description') || '';
-  var url = encodeURIComponent(window.location.href);
-  var encodedTitle = encodeURIComponent(title);
-  var encodedDesc = encodeURIComponent(description);
-
-  // Open popup with helper page
-  var popup = window.open(
-    'HELPER_URL?url=' + url + '&title=' + encodedTitle + '&description=' + encodedDesc,
-    'bookmark',
-    'width=450,height=550,scrollbars=no,resizable=no'
-  );
-})();
-```
+---
 
 ## Features
 
-- **Mode Selection**: Choose between Bookmark, Review Later, or Must Review
+- **Mode Selection**: Choose between Bookmark, Review Later, Must Review, or Mark Reviewed
 - **Auto-save**: Saves after 1 second (you can click a different mode before that)
 - **Visual Feedback**: Shows loading state, success with tags/time, or error messages
 - **Auto-close**: Popup closes automatically after success
 - **CSP Bypass**: Works on sites like GitHub that block inline scripts
 - **No Extension Required**: Pure JavaScript, works in any browser
 
-## Troublading
+---
+
+## Troubleshooting
 
 ### Popup is Blocked
 - Allow popups for the site you're bookmarking
@@ -102,12 +91,13 @@ javascript:(function() {
 ### Helper Page Not Loading
 - Make sure the helper page URL is correct and accessible
 - Check browser console for errors
-- Verify CORS isn't blocking the page (shouldn't be an issue with public hosting)
+- Try accessing the helper page directly: https://knight-systems.github.io/bookmark-helper/
 
 ### API Errors
-- Check that the API endpoints in `bookmark-helper.html` are correct
-- Verify your Lambda functions are deployed and accessible
 - Check the browser console in the popup window for API error details
+- Verify your Lambda functions are deployed and accessible
+
+---
 
 ## Customization
 
@@ -120,26 +110,21 @@ setTimeout(save, 1000); // Change 1000 to desired milliseconds
 ### Change Default Mode
 Edit line in `bookmark-helper.html`:
 ```javascript
-let selectedMode = 'bookmark'; // Change to 'review-later' or 'must-review'
+let selectedMode = 'bookmark'; // Change to 'review-later', 'must-review', or 'mark-reviewed'
 ```
 
-### Change Popup Size
-Edit the bookmarklet code:
-```javascript
-'width=450,height=550,...' // Adjust dimensions
-```
+---
 
 ## Advantages Over Extension
 
-- ✅ Works in any browser (Safari, Firefox, Chrome, Edge, etc.)
-- ✅ No installation or permissions required
-- ✅ Bypasses CSP restrictions
-- ✅ Easy to update (just change the helper page)
-- ✅ Can be used at work where extensions are restricted
+- Works in any browser (Safari, Firefox, Chrome, Edge, etc.)
+- No installation or permissions required
+- Bypasses CSP restrictions
+- Easy to update (just change the helper page)
+- Can be used at work where extensions are restricted
 
 ## Disadvantages
 
-- ❌ Requires hosting the helper page somewhere
-- ❌ Opens a popup (vs. seamless background save)
-- ❌ No right-click context menu
-- ❌ Popup blockers may interfere
+- Opens a popup (vs. seamless background save)
+- No right-click context menu
+- Popup blockers may interfere
