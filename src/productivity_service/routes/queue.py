@@ -329,9 +329,14 @@ async def add_to_queue(request: QueueAddRequest) -> QueueAddResponse:
         content_type = _detect_content_type(url)
         estimated_time = _estimate_review_time(content_type, description)
 
-        # Determine priority (snacks auto-detected)
+        # Determine priority (snacks auto-detected, but never override must-review)
         is_snack = estimated_time <= SNACK_THRESHOLD
-        priority = QueuePriority.SNACK if is_snack else request.priority
+        if request.priority == QueuePriority.MUST_REVIEW:
+            priority = QueuePriority.MUST_REVIEW
+        elif is_snack:
+            priority = QueuePriority.SNACK
+        else:
+            priority = request.priority
 
         # Generate ID
         queue_id = _generate_queue_id(title, date_str)
